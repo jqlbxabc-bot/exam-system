@@ -4,25 +4,13 @@
 flask>=2.0.0
 requests>=2.28.0
 werkzeug>=2.0.0
+gunicorn>=21.2.0
 
 # 文件处理
-PyMuPDF>=1.23.0       # PDF处理
-PyPDF2>=3.0.0         # PDF文字提取
-python-docx>=0.8.11   # Word文档处理
-pillow>=10.0.0        # 图片处理
-pytesseract>=0.3.10   # OCR文字识别
+PyMuPDF>=1.23.0
+PyPDF2>=3.0.0
+python-docx>=0.8.11
+pillow>=10.0.0
 
 # 数据处理
-pandas>=2.0.0         # 数据分析（可选）
-
-# 云存储（可选）
-# oss2>=2.17.0        # 阿里云OSS
-# qcloud-cos-python-sdk # 腾讯云COS
-# qiniu>=7.7.0        # 七牛云
-# minio>=7.0.0        # MinIO
-
-# AI相关（可选）
-# openai>=1.0.0       # OpenAI
-# anthropic>=0.18.0   # Claude
-# dashscope>=1.10.0   # 阿里通义
-# zhipuai>=1.0.0      # 智谱GLM
+pandas>=2.0.0
