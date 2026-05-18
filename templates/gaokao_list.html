@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}高考真题库 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-mortarboard"></i> 高考真题库</h4>
+    <div>
+        <form method="POST" action="{{ url_for('gaokao_batch_classify') }}" class="d-inline" id="batchClassifyForm">
+        </form>
+        <button class="btn btn-outline-warning me-1" onclick="if(confirm('AI将自动为所有未分类题目归类，确定？'))document.getElementById('batchClassifyForm').submit()">
+            <i class="bi bi-magic"></i> AI自动分类
+        </button>
+        <a href="{{ url_for('gaokao_import') }}" class="btn btn-outline-primary me-1">
+            <i class="bi bi-upload"></i> 导入
+        </a>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addGaokaoModal">
+            <i class="bi bi-plus"></i> 添加
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 左侧分类树 -->
+    <div class="col-lg-3">
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-list-nested"></i> 分类浏览</div>
+            <div class="card-body p-2" style="max-height: 70vh; overflow-y: auto;">
+                <!-- 全部 -->
+                <a href="{{ url_for('gaokao_list') }}" class="d-block px-2 py-1 rounded text-decoration-none {{ 'bg-primary text-white' if not selected_subject and not selected_category else 'text-dark' }}">
+                    <i class="bi bi-collection"></i> 全部题目
+                    {% if stats %}<span class="badge bg-secondary float-end">{{ stats|sum(attribute='count') }}</span>{% endif %}
+                </a>
+                
+                {% for subj, cats in category_tree.items() %}
+                <div class="mt-1">
+                    <a class="d-block px-2 py-1 rounded text-decoration-none text-dark fw-bold {{ 'bg-primary text-white' if selected_subject == subj and not selected_category else '' }}" 
+                       data-bs-toggle="collapse" href="#subj-{{ loop.index }}" role="button">
+                        <i class="bi bi-chevron-down small"></i> {{ subj }}
+                        {% set subj_total = [] %}
+                        {% for cat, types in cats.items() %}
+                            {% for t, c in types.items() %}
+                                {% if subj_total.append(c) %}{% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                        <span class="badge bg-secondary float-end">{{ subj_total|sum }}</span>
+                    </a>
+                    <div class="collapse show ms-3" id="subj-{{ loop.index }}">
+                        {% for cat, types in cats.items() %}
+                        <div>
+                            <a href="{{ url_for('gaokao_list', subject=subj, category=cat if cat != '未分类' else '') }}" 
+                               class="d-block px-2 py-1 rounded text-decoration-none small {{ 'bg-primary text-white' if selected_subject == subj and selected_category == cat else 'text-muted' }}">
+                                <i class="bi bi-folder2"></i> {{ cat }}
+                                {% set cat_total = [] %}
+                                {% for t, c in types.items() %}
+                                    {% if cat_total.append(c) %}{% endif %}
+                                {% endfor %}
+                                <span class="badge bg-light text-dark float-end">{{ cat_total|sum }}</span>
+                            </a>
+                            <!-- 题型细分 -->
+                            <div class="ms-3">
+                                {% for t, c in types.items() %}
+                                <a href="{{ url_for('gaokao_list', subject=subj, category=cat if cat != '未分类' else '', question_type=t) }}" 
+                                   class="d-inline-block px-1 text-decoration-none small {{ 'text-primary fw-bold' if selected_question_type == t else 'text-muted' }}">
+                                    {{ t }}({{ c }})
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- 统计卡片 -->
+        {% if stats %}
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-bar-chart"></i> 统计</div>
+            <div class="card-body p-2">
+                {% for s in stats %}
+                <div class="d-flex justify-content-between small mb-1">
+                    <span>{{ s.subject }}</span>
+                    <span><strong>{{ s.count }}</strong> <small class="text-muted">({{ s.min_year }}-{{ s.max_year }})</small></span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- 右侧题目列表 -->
+    <div class="col-lg-9">
+        <!-- 筛选栏 -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <form method="GET" class="row g-2 align-items-center">
+                    <input type="hidden" name="subject" value="{{ selected_subject }}">
+                    <input type="hidden" name="category" value="{{ selected_category }}">
+                    <div class="col-auto">
+                        <select name="difficulty" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">全部难度</option>
+                            {% for d in ['简单','中等','困难'] %}
+                            <option {{ 'selected' if selected_difficulty==d }}>{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select name="question_type" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">全部题型</option>
+                            {% for t in ['选择题','填空题','解答题'] %}
+                            <option {{ 'selected' if selected_question_type==t }}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">全部年份</option>
+                            {% for y in range(2026, 2014, -1) %}
+                            <option {{ 'selected' if selected_year==y }}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col">
+                        <input type="text" name="keyword" class="form-control form-control-sm" 
+                               placeholder="搜索题目内容或知识点..." value="{{ keyword or '' }}">
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-search"></i> 搜索
+                        </button>
+                        {% if selected_subject or selected_category or selected_difficulty or selected_question_type or keyword %}
+                        <a href="{{ url_for('gaokao_list') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-x"></i> 重置
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+        </div>
+        
+        <!-- 题目列表 -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted">共 {{ questions|length }} 题</span>
+            {% if keyword %}
+            <span class="text-muted">搜索: "{{ keyword }}"</span>
+            {% endif %}
+        </div>
+        {% if questions %}
+        {% for q in questions %}
+        <div class="card mb-2">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="mb-1">
+                            <span class="badge bg-info">{{ q.subject }}</span>
+                            {% if q.category %}<span class="badge bg-purple" style="background:#6f42c1">{{ q.category }}</span>{% endif %}
+                            <span class="badge bg-secondary">{{ q.question_type }}</span>
+                            {% if q.year %}<span class="badge bg-outline-dark border">{{ q.year }}年</span>{% endif %}
+                            {% if q.region %}<span class="badge bg-outline-dark border">{{ q.region }}</span>{% endif %}
+                            {% if q.difficulty == '简单' %}<span class="badge bg-success">{{ q.difficulty }}</span>
+                            {% elif q.difficulty == '困难' %}<span class="badge bg-danger">{{ q.difficulty }}</span>
+                            {% else %}<span class="badge bg-warning text-dark">{{ q.difficulty }}</span>{% endif %}
+                        </div>
+                        <div class="text-truncate" style="max-width:600px">{{ q.content[:120] }}</div>
+                        {% if q.knowledge_point %}
+                        <small class="text-muted"><i class="bi bi-tag"></i> {{ q.knowledge_point }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="text-nowrap ms-2">
+                        <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#viewModal{{ q.id }}">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ q.id }}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <form method="POST" action="{{ url_for('gaokao_delete', question_id=q.id) }}" class="d-inline" onsubmit="return confirm('确定删除？')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 查看模态框 -->
+        <div class="modal fade" id="viewModal{{ q.id }}" tabindex="-1">
+            <div class="modal-dialog modal-lg"><div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ q.subject }} {{ q.year or '' }}年 {{ q.region or '' }} 第{{ q.question_number or '?' }}题</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>{% if q.category %}<span class="badge" style="background:#6f42c1">{{ q.category }}</span>{% endif %}
+                       <span class="badge bg-secondary">{{ q.question_type }}</span>
+                       <span class="badge bg-warning text-dark">{{ q.difficulty }}</span>
+                       {% if q.score %}<span class="badge bg-info">{{ q.score }}分</span>{% endif %}
+                    </p>
+                    <div class="p-3 bg-light rounded mb-3" style="white-space:pre-wrap">{{ q.content }}</div>
+                    {% if q.options %}<div class="mb-3"><strong>选项：</strong><pre>{{ q.options }}</pre></div>{% endif %}
+                    {% if q.correct_answer %}<div class="mb-3"><strong>正确答案：</strong><div class="text-success">{{ q.correct_answer }}</div></div>{% endif %}
+                    {% if q.analysis %}<div class="mb-3"><strong>解析：</strong><div>{{ q.analysis }}</div></div>{% endif %}
+                    {% if q.knowledge_point %}<p><strong>知识点：</strong>{{ q.knowledge_point }}</p>{% endif %}
+                    {% if q.source %}<p class="text-muted"><small>来源：{{ q.source }}</small></p>{% endif %}
+                </div>
+            </div></div>
+        </div>
+        
+        <!-- 编辑模态框 -->
+        <div class="modal fade" id="editModal{{ q.id }}" tabindex="-1">
+            <div class="modal-dialog modal-lg"><div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑真题 #{{ q.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="{{ url_for('gaokao_edit', question_id=q.id) }}">
+                    <div class="modal-body">
+                        <div class="row mb-2">
+                            <div class="col-4">
+                                <label class="form-label small">科目</label>
+                                <select name="subject" class="form-select form-select-sm">
+                                    {% for s in ['语文','数学','英语','物理','化学','生物','历史','地理','政治'] %}
+                                    <option {{ 'selected' if q.subject==s }}>{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">分类</label>
+                                <input type="text" name="category" class="form-control form-control-sm" value="{{ q.category or '' }}" placeholder="如：三角函数">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">题型</label>
+                                <select name="question_type" class="form-select form-select-sm">
+                                    {% for t in ['选择题','填空题','解答题'] %}
+                                    <option {{ 'selected' if q.question_type==t }}>{{ t }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-3">
+                                <label class="form-label small">年份</label>
+                                <input type="number" name="year" class="form-control form-control-sm" value="{{ q.year or '' }}">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label small">地区</label>
+                                <input type="text" name="region" class="form-control form-control-sm" value="{{ q.region or '' }}">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label small">难度</label>
+                                <select name="difficulty" class="form-select form-select-sm">
+                                    {% for d in ['简单','中等','困难'] %}
+                                    <option {{ 'selected' if q.difficulty==d }}>{{ d }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label small">分值</label>
+                                <input type="number" name="score" class="form-control form-control-sm" value="{{ q.score or '' }}" step="0.5">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">题目内容</label>
+                            <textarea name="content" class="form-control form-control-sm" rows="3">{{ q.content }}</textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">选项</label>
+                            <textarea name="options" class="form-control form-control-sm" rows="2">{{ q.options or '' }}</textarea>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <label class="form-label small">正确答案</label>
+                                <textarea name="correct_answer" class="form-control form-control-sm" rows="2">{{ q.correct_answer or '' }}</textarea>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">知识点</label>
+                                <input type="text" name="knowledge_point" class="form-control form-control-sm" value="{{ q.knowledge_point or '' }}">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">解析</label>
+                            <textarea name="analysis" class="form-control form-control-sm" rows="2">{{ q.analysis or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                    </div>
+                </form>
+            </div></div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-mortarboard" style="font-size:3rem"></i>
+            <p class="mt-3">暂无题目</p>
+            <p>点击"导入"上传高考试卷，或"添加"手动录入</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 添加模态框 -->
+<div class="modal fade" id="addGaokaoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">添加高考真题</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <form method="POST" action="{{ url_for('gaokao_add') }}">
+            <div class="modal-body">
+                <div class="row mb-2">
+                    <div class="col-3"><label class="form-label">科目 *</label>
+                        <select name="subject" class="form-select" required>{% for s in subjects %}<option>{{ s }}</option>{% endfor %}</select></div>
+                    <div class="col-3"><label class="form-label">分类</label><input type="text" name="category" class="form-control" placeholder="如：三角函数"></div>
+                    <div class="col-3"><label class="form-label">年份</label><input type="number" name="year" class="form-control" min="2000" max="2030"></div>
+                    <div class="col-3"><label class="form-label">地区</label><input type="text" name="region" class="form-control" placeholder="全国甲卷"></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-4"><label class="form-label">题号</label><input type="number" name="question_number" class="form-control"></div>
+                    <div class="col-4"><label class="form-label">题型</label>
+                        <select name="question_type" class="form-select"><option>选择题</option><option>填空题</option><option>解答题</option></select></div>
+                    <div class="col-4"><label class="form-label">难度</label>
+                        <select name="difficulty" class="form-select"><option>简单</option><option selected>中等</option><option>困难</option></select></div>
+                </div>
+                <div class="mb-2"><label class="form-label">题目内容 *</label><textarea name="content" class="form-control" rows="3" required></textarea></div>
+                <div class="mb-2"><label class="form-label">选项</label><textarea name="options" class="form-control" rows="2" placeholder="A. xxx\nB. xxx"></textarea></div>
+                <div class="row mb-2">
+                    <div class="col-6"><label class="form-label">正确答案</label><textarea name="correct_answer" class="form-control" rows="2"></textarea></div>
+                    <div class="col-6"><label class="form-label">知识点</label><input type="text" name="knowledge_point" class="form-control" placeholder="三角函数,正弦定理"></div>
+                </div>
+                <div class="mb-2"><label class="form-label">解析</label><textarea name="analysis" class="form-control" rows="2"></textarea></div>
+                <div class="row mb-2">
+                    <div class="col-6"><label class="form-label">分值</label><input type="number" name="score" class="form-control" step="0.5"></div>
+                    <div class="col-6"><label class="form-label">来源</label><input type="text" name="source" class="form-control"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-primary">添加</button>
+            </div>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

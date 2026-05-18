@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}学习报告 - 试卷管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 40px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    
+    [data-theme="dark"] .report-container {
+        background: var(--bg-card);
+    }
+    
+    .report-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 3px solid var(--primary);
+    }
+    
+    .report-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 10px;
+    }
+    
+    .report-subtitle {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+    }
+    
+    .report-section {
+        margin-bottom: 30px;
+    }
+    
+    .report-section h5 {
+        color: var(--primary);
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+    
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .report-stat {
+        text-align: center;
+        padding: 15px;
+        background: var(--bg-body);
+        border-radius: 8px;
+    }
+    
+    .report-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .report-stat-label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    
+    .progress-bar-container {
+        background: var(--border-color);
+        border-radius: 10px;
+        height: 20px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary) 0%, #818cf8 100%);
+        border-radius: 10px;
+        transition: width 0.5s;
+    }
+    
+    .subject-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .subject-item {
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .subject-item:last-child {
+        border-bottom: none;
+    }
+    
+    .subject-score {
+        font-weight: 600;
+        color: var(--primary);
+    }
+    
+    .mistake-summary {
+        background: #fef3c7;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #f59e0b;
+    }
+    
+    [data-theme="dark"] .mistake-summary {
+        background: #451a03;
+    }
+    
+    .report-footer {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 2px solid var(--border-color);
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .report-container {
+            box-shadow: none;
+            padding: 20px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">📊 学习报告</h4>
+        <div>
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="bi bi-printer"></i> 打印报告
+            </button>
+            <button class="btn btn-outline-primary" onclick="exportPDF()">
+                <i class="bi bi-file-pdf"></i> 导出PDF
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="report-container">
+    <!-- 报告头部 -->
+    <div class="report-header">
+        <div class="report-title">学习报告</div>
+        <div class="report-subtitle">{{ user.display_name }} | {{ report_date }}</div>
+    </div>
+    
+    <!-- 总体统计 -->
+    <div class="report-section">
+        <h5><i class="bi bi-bar-chart"></i> 总体统计</h5>
+        <div class="stat-grid">
+            <div class="report-stat">
+                <div class="report-stat-value">{{ stats.total_exams }}</div>
+                <div class="report-stat-label">试卷数量</div>
+            </div>
+            <div class="report-stat">
+                <div class="report-stat-value">{{ stats.total_questions }}</div>
+                <div class="report-stat-label">题目数量</div>
+            </div>
+            <div class="report-stat">
+                <div class="report-stat-value">{{ stats.total_mistakes }}</div>
+                <div class="report-stat-label">错题数量</div>
+            </div>
+            <div class="report-stat">
+                <div class="report-stat-value">{{ stats.accuracy_rate }}%</div>
+                <div class="report-stat-label">正确率</div>
+            </div>
+        </div>
+        
+        <!-- 正确率进度条 -->
+        <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+                <span>总体正确率</span>
+                <span>{{ stats.accuracy_rate }}%</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: {{ stats.accuracy_rate }}%"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 各科成绩 -->
+    <div class="report-section">
+        <h5><i class="bi bi-book"></i> 各科成绩</h5>
+        {% if subject_stats %}
+            <ul class="subject-list">
+                {% for subject in subject_stats %}
+                <li class="subject-item">
+                    <span>{{ subject.subject }}</span>
+                    <span class="subject-score">{{ subject.avg_rate }}%</span>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted">暂无成绩数据</p>
+        {% endif %}
+    </div>
+    
+    <!-- 错题分析 -->
+    <div class="report-section">
+        <h5><i class="bi bi-exclamation-triangle"></i> 错题分析</h5>
+        <div class="mistake-summary">
+            <p><strong>错题总数：</strong>{{ stats.total_mistakes }} 道</p>
+            <p><strong>已掌握：</strong>{{ mastered_count }} 道</p>
+            <p><strong>待复习：</strong>{{ review_count }} 道</p>
+        </div>
+        
+        {% if mistake_subjects %}
+            <h6 class="mt-3 mb-2">各科错题分布：</h6>
+            <ul class="subject-list">
+                {% for subject in mistake_subjects %}
+                <li class="subject-item">
+                    <span>{{ subject.subject }}</span>
+                    <span class="badge bg-warning">{{ subject.count }} 道</span>
+                </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+    
+    <!-- 学习计划 -->
+    <div class="report-section">
+        <h5><i class="bi bi-calendar-check"></i> 学习计划</h5>
+        {% if plan_stats %}
+            <div class="stat-grid">
+                <div class="report-stat">
+                    <div class="report-stat-value">{{ plan_stats.total_plans }}</div>
+                    <div class="report-stat-label">总计划数</div>
+                </div>
+                <div class="report-stat">
+                    <div class="report-stat-value">{{ plan_stats.active_plans }}</div>
+                    <div class="report-stat-label">进行中</div>
+                </div>
+                <div class="report-stat">
+                    <div class="report-stat-value">{{ plan_stats.completed_plans }}</div>
+                    <div class="report-stat-label">已完成</div>
+                </div>
+                <div class="report-stat">
+                    <div class="report-stat-value">{{ plan_stats.completion_rate }}%</div>
+                    <div class="report-stat-label">完成率</div>
+                </div>
+            </div>
+        {% else %}
+            <p class="text-muted">暂无学习计划</p>
+        {% endif %}
+    </div>
+    
+    <!-- 学习建议 -->
+    <div class="report-section">
+        <h5><i class="bi bi-lightbulb"></i> 学习建议</h5>
+        <ul>
+            {% for suggestion in suggestions %}
+            <li class="mb-2">{{ suggestion }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+    <!-- 报告底部 -->
+    <div class="report-footer">
+        <p>报告生成时间：{{ generated_at }}</p>
+        <p>试卷管理系统 - 学习报告</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function exportPDF() {
+        // 使用浏览器打印功能导出PDF
+        // 在打印对话框中选择"另存为PDF"
+        window.print();
+    }
+</script>
+{% endblock %}

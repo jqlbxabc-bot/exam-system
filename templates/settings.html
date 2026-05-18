@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block title %}系统设置 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h4>⚙️ 系统设置</h4>
+</div>
+
+<div class="row">
+    <!-- AI配置 -->
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-robot"></i> AI模型配置
+            </div>
+            <div class="card-body">
+                <form id="aiConfigForm">
+                    <div class="mb-3">
+                        <label class="form-label">AI提供商</label>
+                        <select class="form-select" id="ai_provider" onchange="updateBaseUrl()">
+                            <option value="openai">OpenAI</option>
+                            <option value="claude">Claude (Anthropic)</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="qwen">通义千问 (阿里)</option>
+                            <option value="zhipu">智谱AI (GLM)</option>
+                            <option value="moonshot">Moonshot (Kimi)</option>
+                            <option value="local">本地模型 (Ollama)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="ai_api_key" 
+                                   placeholder="输入API Key">
+                            <button class="btn btn-outline-secondary" type="button" 
+                                    onclick="togglePassword('ai_api_key')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">请从AI服务商获取API Key</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">模型名称</label>
+                        <input type="text" class="form-control" id="ai_model" 
+                               placeholder="例如：gpt-4, claude-3-opus, deepseek-chat">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">API基础URL</label>
+                        <input type="text" class="form-control" id="ai_base_url" 
+                               placeholder="https://api.openai.com/v1">
+                        <div class="form-text">国内用户可能需要使用代理地址</div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="saveAiConfig()">
+                            <i class="bi bi-save"></i> 保存配置
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="testAiConnection()">
+                            <i class="bi bi-lightning"></i> 测试连接
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 常用AI配置预设 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-bookmark"></i> 常用配置预设
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="loadPreset('openai', 'gpt-4', 'https://api.openai.com/v1')">
+                        <strong>OpenAI GPT-4</strong>
+                        <small class="d-block text-muted">api.openai.com</small>
+                    </button>
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="loadPreset('deepseek', 'deepseek-chat', 'https://api.deepseek.com/v1')">
+                        <strong>DeepSeek</strong>
+                        <small class="d-block text-muted">api.deepseek.com - 国内推荐</small>
+                    </button>
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="loadPreset('qwen', 'qwen-turbo', 'https://dashscope.aliyuncs.com/api/v1')">
+                        <strong>通义千问</strong>
+                        <small class="d-block text-muted">阿里云 - 国内推荐</small>
+                    </button>
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="loadPreset('moonshot', 'moonshot-v1-8k', 'https://api.moonshot.cn/v1')">
+                        <strong>Moonshot (Kimi)</strong>
+                        <small class="d-block text-muted">api.moonshot.cn</small>
+                    </button>
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="loadPreset('local', 'llama3', 'http://localhost:11434/api')">
+                        <strong>本地Ollama</strong>
+                        <small class="d-block text-muted">localhost:11434 - 需要本地部署</small>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 存储配置 -->
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-cloud"></i> 存储配置
+            </div>
+            <div class="card-body">
+                <form id="storageConfigForm">
+                    <div class="mb-3">
+                        <label class="form-label">存储类型</label>
+                        <select class="form-select" id="storage_type" onchange="toggleCloudConfig()">
+                            <option value="local">本地存储</option>
+                            <option value="cloud">云端存储</option>
+                        </select>
+                    </div>
+                    
+                    <div id="cloudConfig" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">云存储提供商</label>
+                            <select class="form-select" id="cloud_provider">
+                                <option value="阿里云OSS">阿里云OSS</option>
+                                <option value="腾讯云COS">腾讯云COS</option>
+                                <option value="七牛云">七牛云</option>
+                                <option value="MinIO">MinIO</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Endpoint / Region</label>
+                            <input type="text" class="form-control" id="cloud_endpoint" 
+                                   placeholder="例如：oss-cn-hangzhou.aliyuncs.com">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Access Key</label>
+                            <input type="text" class="form-control" id="cloud_access_key" 
+                                   placeholder="云存储AccessKey">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Secret Key</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="cloud_secret_key" 
+                                       placeholder="云存储SecretKey">
+                                <button class="btn btn-outline-secondary" type="button" 
+                                        onclick="togglePassword('cloud_secret_key')">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Bucket</label>
+                            <input type="text" class="form-control" id="cloud_bucket" 
+                                   placeholder="存储桶名称">
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" onclick="saveStorageConfig()">
+                        <i class="bi bi-save"></i> 保存配置
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 上传配置 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-upload"></i> 上传配置
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">最大上传大小 (MB)</label>
+                    <input type="number" class="form-control" id="upload_max_size" value="50" min="1" max="500">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">允许的文件类型</label>
+                    <input type="text" class="form-control" id="allowed_extensions" 
+                           value="jpg,jpeg,png,gif,bmp,pdf,doc,docx">
+                    <div class="form-text">多个类型用逗号分隔</div>
+                </div>
+                
+                <button type="button" class="btn btn-primary" onclick="saveUploadConfig()">
+                    <i class="bi bi-save"></i> 保存配置
+                </button>
+            </div>
+        </div>
+        
+        <!-- 系统信息 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> 系统信息
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <td>系统版本</td>
+                        <td>v1.0.0</td>
+                    </tr>
+                    <tr>
+                        <td>Python版本</td>
+                        <td>3.12</td>
+                    </tr>
+                    <tr>
+                        <td>数据库</td>
+                        <td>SQLite</td>
+                    </tr>
+                    <tr>
+                        <td>存储位置</td>
+                        <td id="storageLocation">本地</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 加载配置
+function loadConfig() {
+    fetch('/settings')
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // 从页面中提取配置值（简化处理）
+        });
+}
+
+// 更新基础URL
+function updateBaseUrl() {
+    const provider = document.getElementById('ai_provider').value;
+    const urls = {
+        'openai': 'https://api.openai.com/v1',
+        'claude': 'https://api.anthropic.com',
+        'deepseek': 'https://api.deepseek.com/v1',
+        'qwen': 'https://dashscope.aliyuncs.com/api/v1',
+        'zhipu': 'https://open.bigmodel.cn/api/paas/v4',
+        'moonshot': 'https://api.moonshot.cn/v1',
+        'local': 'http://localhost:11434/api'
+    };
+    document.getElementById('ai_base_url').value = urls[provider] || '';
+}
+
+// 加载预设
+function loadPreset(provider, model, baseUrl) {
+    document.getElementById('ai_provider').value = provider;
+    document.getElementById('ai_model').value = model;
+    document.getElementById('ai_base_url').value = baseUrl;
+}
+
+// 切换云存储配置显示
+function toggleCloudConfig() {
+    const storageType = document.getElementById('storage_type').value;
+    document.getElementById('cloudConfig').style.display = storageType === 'cloud' ? 'block' : 'none';
+}
+
+// 切换密码显示
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// 保存AI配置
+function saveAiConfig() {
+    const configs = {
+        'ai_provider': document.getElementById('ai_provider').value,
+        'ai_api_key': document.getElementById('ai_api_key').value,
+        'ai_model': document.getElementById('ai_model').value,
+        'ai_base_url': document.getElementById('ai_base_url').value
+    };
+    
+    let saved = 0;
+    for (const [key, value] of Object.entries(configs)) {
+        fetch('/settings/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `key=${key}&value=${encodeURIComponent(value)}`
+        }).then(() => {
+            saved++;
+            if (saved === Object.keys(configs).length) {
+                alert('AI配置保存成功！');
+            }
+        });
+    }
+}
+
+// 保存存储配置
+function saveStorageConfig() {
+    const configs = {
+        'storage_type': document.getElementById('storage_type').value,
+        'cloud_provider': document.getElementById('cloud_provider').value,
+        'cloud_endpoint': document.getElementById('cloud_endpoint').value,
+        'cloud_access_key': document.getElementById('cloud_access_key').value,
+        'cloud_secret_key': document.getElementById('cloud_secret_key').value,
+        'cloud_bucket': document.getElementById('cloud_bucket').value
+    };
+    
+    let saved = 0;
+    for (const [key, value] of Object.entries(configs)) {
+        fetch('/settings/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `key=${key}&value=${encodeURIComponent(value)}`
+        }).then(() => {
+            saved++;
+            if (saved === Object.keys(configs).length) {
+                alert('存储配置保存成功！');
+                document.getElementById('storageLocation').textContent = 
+                    configs.storage_type === 'local' ? '本地' : configs.cloud_provider;
+            }
+        });
+    }
+}
+
+// 保存上传配置
+function saveUploadConfig() {
+    const configs = {
+        'upload_max_size': document.getElementById('upload_max_size').value,
+        'allowed_extensions': document.getElementById('allowed_extensions').value
+    };
+    
+    let saved = 0;
+    for (const [key, value] of Object.entries(configs)) {
+        fetch('/settings/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `key=${key}&value=${encodeURIComponent(value)}`
+        }).then(() => {
+            saved++;
+            if (saved === Object.keys(configs).length) {
+                alert('上传配置保存成功！');
+            }
+        });
+    }
+}
+
+// 测试AI连接
+function testAiConnection() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 测试中...';
+    
+    fetch('/settings/test-ai', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-lightning"></i> 测试连接';
+            
+            if (data.success) {
+                alert('✅ ' + data.message);
+            } else {
+                alert('❌ ' + data.message);
+            }
+        })
+        .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-lightning"></i> 测试连接';
+            alert('测试失败: ' + error);
+        });
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 设置默认值（实际应该从数据库加载）
+    const configs = {{ configs | tojson }};
+    configs.forEach(config => {
+        const el = document.getElementById(config.config_key);
+        if (el) {
+            el.value = config.config_value;
+        }
+    });
+    
+    toggleCloudConfig();
+});
+</script>
+{% endblock %}

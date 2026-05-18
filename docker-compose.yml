@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: exam-system
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

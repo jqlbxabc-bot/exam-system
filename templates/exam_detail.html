@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exam.title }} - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex align-items-center">
+        <h4 class="mb-0" id="exam-title">{{ exam.title }}</h4>
+        <button class="btn btn-sm btn-outline-primary ms-2" onclick="showEditModal()">
+            <i class="bi bi-pencil"></i> 编辑
+        </button>
+    </div>
+    <div>
+        <a href="{{ url_for('exam_list') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+        <form method="POST" action="{{ url_for('delete_exam', exam_id=exam.id) }}" 
+              class="d-inline" onsubmit="return confirm('确定要删除吗？')">
+            <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-trash"></i> 删除
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- 编辑试卷模态框 -->
+<div class="modal fade" id="editExamModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑试卷信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_exam', exam_id=exam.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">试卷名称</label>
+                        <input type="text" class="form-control" name="title" value="{{ exam.title }}" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">科目</label>
+                            <select class="form-select" name="subject">
+                                {% for s in ['语文', '数学', '英语', '物理', '化学', '生物', '历史', '地理', '政治'] %}
+                                <option value="{{ s }}" {{ 'selected' if exam.subject == s }}>{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">年级</label>
+                            <select class="form-select" name="grade">
+                                <option value="">不限</option>
+                                {% for g in ['高一', '高二', '高三'] %}
+                                <option value="{{ g }}" {{ 'selected' if exam.grade == g }}>{{ g }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">考试类型</label>
+                            <select class="form-select" name="exam_type">
+                                {% for t in ['月考', '期中', '期末', '模拟', '高考真题', '竞赛'] %}
+                                <option value="{{ t }}" {{ 'selected' if exam.exam_type == t }}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">总分</label>
+                            <input type="number" class="form-control" name="total_score" value="{{ exam.total_score }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">考试日期</label>
+                        <input type="date" class="form-control" name="exam_date" value="{{ exam.exam_date or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" rows="3">{{ exam.description or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showEditModal() {
+    var modal = new bootstrap.Modal(document.getElementById('editExamModal'));
+    modal.show();
+}
+</script>
+
+<div class="row">
+    <!-- 左侧：试卷信息 -->
+    <div class="col-lg-8">
+        <!-- 基本信息 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> 试卷信息
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>科目：</strong> <span class="badge bg-primary">{{ exam.subject }}</span></p>
+                        <p><strong>年级：</strong> {{ exam.grade or '高中' }}</p>
+                        <p><strong>考试类型：</strong> {{ exam.exam_type }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>总分：</strong> {{ exam.total_score }}分</p>
+                        <p><strong>考试日期：</strong> {{ exam.exam_date or '未设置' }}</p>
+                        <p><strong>上传时间：</strong> {{ exam.created_at }}</p>
+                    </div>
+                </div>
+                {% if exam.description %}
+                <hr>
+                <p><strong>描述：</strong></p>
+                <p class="text-muted">{{ exam.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 试卷文件 -->
+        {% if files %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-images"></i> 试卷文件
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for file in files %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            {% if file.file_type in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
+                                <img src="{{ file.cloud_url or url_for('uploaded_file', filename=file.file_path.split('/')[-1]) }}" 
+                                     class="card-img-top" alt="{{ file.file_name }}" style="height: 200px; object-fit: cover;">
+                            {% else %}
+                                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                                    <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 3rem;"></i>
+                                </div>
+                            {% endif %}
+                            <div class="card-body p-2">
+                                <small class="text-muted">{{ file.file_name }}</small>
+                                <br>
+                                <small class="text-muted">第{{ file.page_number }}页</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- AI分析 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-robot"></i> AI智能分析</span>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-primary" onclick="analyzeExam('综合分析')">
+                        <i class="bi bi-lightning"></i> 综合分析
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="analyzeExam('知识点总结')">
+                        <i class="bi bi-book"></i> 知识点总结
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="analyzeExam('学习建议')">
+                        <i class="bi bi-lightbulb"></i> 学习建议
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="analyzeExam('错题提取与分析')">
+                        <i class="bi bi-exclamation-triangle"></i> 错题提取
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="aiLoading" style="display: none;" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">分析中...</span>
+                    </div>
+                    <p class="mt-2 text-muted">AI正在分析试卷，请稍候...</p>
+                </div>
+                
+                <div id="aiResult">
+                    {% if analyses %}
+                        {% for analysis in analyses %}
+                        <div class="mb-4 border-start border-3 border-{{ 'primary' if analysis.analysis_type == '综合分析' else 'success' if analysis.analysis_type == '知识点总结' else 'warning' if analysis.analysis_type == '学习建议' else 'danger' if '错题' in analysis.analysis_type else 'info' }} ps-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">
+                                    <span class="badge bg-{{ 'primary' if analysis.analysis_type == '综合分析' else 'success' if analysis.analysis_type == '知识点总结' else 'warning text-dark' if analysis.analysis_type == '学习建议' else 'danger' if '错题' in analysis.analysis_type else 'info' }}">{{ analysis.analysis_type }}</span>
+                                    <small class="text-muted ms-2">{{ analysis.created_at }}</small>
+                                </h6>
+                                <div>
+                                    {% if analysis.difficulty %}<span class="badge bg-secondary">难度: {{ analysis.difficulty }}</span>{% endif %}
+                                    {% if analysis.question_count %}<span class="badge bg-secondary">题数: {{ analysis.question_count }}</span>{% endif %}
+                                    <small class="text-muted">模型: {{ analysis.model_name or 'AI' }}</small>
+                                </div>
+                            </div>
+                            {% if analysis.knowledge_summary %}
+                            <p class="text-muted small mb-2"><i class="bi bi-bookmark"></i> {{ analysis.knowledge_summary }}</p>
+                            {% endif %}
+                            <div class="analysis-content" id="analysis-{{ analysis.id }}">
+                                {{ analysis.content }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-robot" style="font-size: 2rem;"></i>
+                            <p class="mt-2">点击上方按钮进行AI分析</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI对话 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-chat-dots"></i> 与AI对话
+            </div>
+            <div class="card-body">
+                <div class="chat-container" id="chatContainer">
+                    <div class="chat-message ai">
+                        <div class="chat-bubble">
+                            你好！我是AI学习助手，关于这份试卷你有什么问题吗？
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group mt-3">
+                    <input type="text" class="form-control" id="chatInput" 
+                           placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendChat()">
+                    <button class="btn btn-primary" onclick="sendChat()">
+                        <i class="bi bi-send"></i> 发送
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右侧：快捷操作 -->
+    <div class="col-lg-4">
+        <!-- 快捷分析 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-lightning"></i> 快捷分析
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary text-start" onclick="analyzeExam('综合分析')">
+                        <i class="bi bi-clipboard-data"></i> 综合分析
+                        <small class="d-block text-muted">难度评估、知识点分布、题型分析</small>
+                    </button>
+                    <button class="btn btn-outline-success text-start" onclick="analyzeExam('知识点总结')">
+                        <i class="bi bi-book"></i> 知识点总结
+                        <small class="d-block text-muted">核心知识点、考察频率、重点标注</small>
+                    </button>
+                    <button class="btn btn-outline-warning text-start" onclick="analyzeExam('学习建议')">
+                        <i class="bi bi-lightbulb"></i> 学习建议
+                        <small class="d-block text-muted">学习计划、提升方案、资源推荐</small>
+                    </button>
+                    <button class="btn btn-outline-danger text-start" onclick="analyzeExam('错题提取与分析')">
+                        <i class="bi bi-exclamation-triangle"></i> 错题提取
+                        <small class="d-block text-muted">自动识别错题并添加到错题本</small>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加错题 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-plus-circle"></i> 添加错题
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_mistake') }}">
+                    <input type="hidden" name="exam_id" value="{{ exam.id }}">
+                    <input type="hidden" name="subject" value="{{ exam.subject }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">题目类型</label>
+                        <select class="form-select" name="question_type">
+                            <option value="选择题">选择题</option>
+                            <option value="填空题">填空题</option>
+                            <option value="解答题">解答题</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">题目内容</label>
+                        <textarea class="form-control" name="content" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">正确答案</label>
+                        <textarea class="form-control" name="correct_answer" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">我的答案</label>
+                        <textarea class="form-control" name="user_answer" rows="2"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="bi bi-plus"></i> 添加到错题本
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 相关试卷 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-collection"></i> 相关试卷
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">同科目试卷：</p>
+                <div class="list-group list-group-flush">
+                    <a href="#" class="list-group-item list-group-item-action small">
+                        暂无相关试卷
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let chatContext = [];
+
+function analyzeExam(type) {
+    // 先检查是否已有该类型的分析
+    fetch(`/exams/{{ exam.id }}/analyses/check?type=${encodeURIComponent(type)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.exists) {
+                const info = data.difficulty ? `（难度: ${data.difficulty}）` : '';
+                const time = data.created_at ? `\n上次分析时间: ${data.created_at}` : '';
+                const msg = `该试卷已有「${type}」分析结果${info}${time}\n\n是否重新分析？（将覆盖旧结果）`;
+                if (!confirm(msg)) {
+                    return;
+                }
+            }
+            doAnalyze(type);
+        })
+        .catch(() => {
+            // 检查失败时直接执行分析
+            doAnalyze(type);
+        });
+}
+
+function doAnalyze(type) {
+    const loading = document.getElementById('aiLoading');
+    const result = document.getElementById('aiResult');
+    
+    loading.style.display = 'block';
+    console.log('开始分析:', type);
+    
+    fetch('{{ url_for("analyze_exam", exam_id=exam.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `analysis_type=${encodeURIComponent(type)}`
+    })
+    .then(response => {
+        console.log('响应状态:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP错误: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('响应数据:', data);
+        loading.style.display = 'none';
+        
+        if (data.success) {
+            // 检查是否有错题被保存
+            let savedNotice = '';
+            if (data.saved_mistakes && data.saved_mistakes.length > 0) {
+                savedNotice = `
+                    <div class="alert alert-success mt-3">
+                        <i class="bi bi-check-circle"></i> ${data.message}
+                        <br><small>题目编号: ${data.saved_mistakes.join(', ')}</small>
+                        <br><a href="/mistakes" class="alert-link">查看错题本 →</a>
+                    </div>
+                `;
+            }
+            
+            // 结构化badge
+            const typeColors = {
+                '综合分析': 'bg-primary',
+                '知识点总结': 'bg-success',
+                '学习建议': 'bg-warning text-dark',
+                '错题提取与分析': 'bg-danger',
+                '错题分析': 'bg-info'
+            };
+            const badgeClass = typeColors[type] || 'bg-info';
+            
+            // 添加到显示
+            const analysisHtml = `
+                <div class="mb-4 border-start border-3 border-${badgeClass.replace('bg-','')} ps-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">
+                            <span class="badge ${badgeClass}">${type}</span>
+                            <small class="text-muted ms-2">刚刚</small>
+                        </h6>
+                        <div>
+                            ${data.difficulty ? `<span class="badge bg-secondary">难度: ${data.difficulty}</span>` : ''}
+                            ${data.question_count ? `<span class="badge bg-secondary">题数: ${data.question_count}</span>` : ''}
+                        </div>
+                    </div>
+                    ${data.knowledge_summary ? `<p class="text-muted small mb-2"><i class="bi bi-bookmark"></i> ${data.knowledge_summary}</p>` : ''}
+                    <div class="analysis-content">${typeof marked !== 'undefined' ? marked.parse(data.content) : data.content}</div>
+                    ${savedNotice}
+                </div>
+            `;
+            
+            if (result.querySelector('.text-center')) {
+                result.innerHTML = analysisHtml;
+            } else {
+                result.insertAdjacentHTML('afterbegin', analysisHtml);
+            }
+        } else {
+            console.error('分析失败:', data.error);
+            alert('分析失败: ' + (data.error || '未知错误'));
+        }
+    })
+    .catch(error => {
+        loading.style.display = 'none';
+        console.error('请求失败:', error);
+        alert('请求失败: ' + error.message);
+    });
+}
+
+function sendChat() {
+    const input = document.getElementById('chatInput');
+    const container = document.getElementById('chatContainer');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // 添加用户消息
+    container.innerHTML += `
+        <div class="chat-message user">
+            <div class="chat-bubble">${escapeHtml(message)}</div>
+        </div>
+    `;
+    
+    input.value = '';
+    container.scrollTop = container.scrollHeight;
+    
+    // 发送请求
+    fetch('{{ url_for("chat_about_exam", exam_id=exam.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `message=${encodeURIComponent(message)}&context=${encodeURIComponent(JSON.stringify(chatContext))}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 添加AI回复
+            container.innerHTML += `
+                <div class="chat-message ai">
+                    <div class="chat-bubble">${marked.parse(data.response)}</div>
+                </div>
+            `;
+            
+            // 更新上下文
+            chatContext.push({role: 'user', content: message});
+            chatContext.push({role: 'assistant', content: data.response});
+            
+            container.scrollTop = container.scrollHeight;
+        }
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 渲染Markdown
+document.querySelectorAll('.analysis-content').forEach(el => {
+    el.innerHTML = marked.parse(el.textContent);
+});
+</script>
+{% endblock %}

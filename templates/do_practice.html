@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}做练习 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0"><i class="bi bi-pencil-square"></i> {{ practice_session.title or '专项练习' }}</h4>
+        <small class="text-muted">科目：{{ practice_session.subject or '综合' }} | 题目数：{{ questions|length }}</small>
+    </div>
+    <a href="{{ url_for('practice_list') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> 返回列表
+    </a>
+</div>
+
+<form method="POST" action="{{ url_for('submit_practice', session_id=practice_session.id) }}" id="practiceForm">
+    {% for question in questions %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>
+                <strong>第{{ question.question_number }}题</strong>
+                <span class="badge bg-info ms-2">{{ question.question_type }}</span>
+            </span>
+        </div>
+        <div class="card-body">
+            <!-- 题目内容 -->
+            <div class="mb-4" style="white-space: pre-wrap; line-height: 1.8;">{{ question.content }}</div>
+            
+            {% if question.options %}
+            <!-- 选择题选项 -->
+            <div class="mb-3">
+                {% for option in question.options.split('\n') if option.strip() %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" 
+                           name="answer_{{ question.id }}" 
+                           id="option_{{ question.id }}_{{ loop.index }}" 
+                           value="{{ option.strip()[:1] }}">
+                    <label class="form-check-label" for="option_{{ question.id }}_{{ loop.index }}">
+                        {{ option.strip() }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <!-- 填空题/解答题 -->
+            <div class="mb-3">
+                <label class="form-label">你的答案：</label>
+                <textarea class="form-control" name="answer_{{ question.id }}" rows="3" 
+                          placeholder="请输入你的答案..."></textarea>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    
+    <div class="text-center mb-4">
+        <button type="submit" class="btn btn-primary btn-lg" onclick="return confirmSubmit()">
+            <i class="bi bi-check-circle"></i> 提交答案
+        </button>
+    </div>
+</form>
+
+<script>
+function confirmSubmit() {
+    const form = document.getElementById('practiceForm');
+    const inputs = form.querySelectorAll('textarea, input[type="radio"]:checked');
+    let answered = 0;
+    
+    // 统计已答题目
+    const textareas = form.querySelectorAll('textarea');
+    const checkedRadios = form.querySelectorAll('input[type="radio"]:checked');
+    
+    textareas.forEach(ta => {
+        if (ta.value.trim()) answered++;
+    });
+    
+    answered += checkedRadios.length;
+    
+    const total = {{ questions|length }};
+    
+    if (answered < total) {
+        return confirm(`你还有 ${total - answered} 道题未作答，确定要提交吗？`);
+    }
+    
+    return confirm('确定要提交答案吗？');
+}
+</script>
+{% endblock %}

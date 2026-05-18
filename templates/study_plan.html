@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+
+{% block title %}学习计划 - 试卷管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .plan-card {
+        border-left: 4px solid var(--primary);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .plan-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .plan-card.completed {
+        border-left-color: #10b981;
+        opacity: 0.8;
+    }
+    
+    .plan-card.overdue {
+        border-left-color: #ef4444;
+    }
+    
+    .plan-progress {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--border-color);
+        overflow: hidden;
+    }
+    
+    .plan-progress-bar {
+        height: 100%;
+        border-radius: 4px;
+        background: linear-gradient(90deg, var(--primary) 0%, #818cf8 100%);
+        transition: width 0.5s ease;
+    }
+    
+    .plan-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .plan-stat {
+        padding: 20px;
+        border-radius: 12px;
+        background: var(--bg-card);
+        box-shadow: var(--shadow-sm);
+        text-align: center;
+    }
+    
+    .plan-stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .plan-stat-label {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+    
+    .task-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .task-item {
+        padding: 12px 15px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .task-item:last-child {
+        border-bottom: none;
+    }
+    
+    .task-checkbox {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .task-content {
+        flex: 1;
+    }
+    
+    .task-content.completed {
+        text-decoration: line-through;
+        color: var(--text-muted);
+    }
+    
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+    }
+    
+    .calendar-day {
+        padding: 10px;
+        text-align: center;
+        border-radius: 8px;
+        background: var(--bg-body);
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    
+    .calendar-day:hover {
+        background: rgba(79, 70, 229, 0.1);
+    }
+    
+    .calendar-day.today {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .calendar-day.has-plan {
+        background: rgba(79, 70, 229, 0.2);
+        font-weight: 600;
+    }
+    
+    .calendar-header {
+        font-weight: 600;
+        padding: 10px;
+        text-align: center;
+        color: var(--text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">📅 学习计划</h4>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPlanModal">
+        <i class="bi bi-plus"></i> 新建计划
+    </button>
+</div>
+
+<!-- 学习统计 -->
+<div class="plan-stats">
+    <div class="plan-stat">
+        <div class="plan-stat-value">{{ stats.total_plans }}</div>
+        <div class="plan-stat-label">总计划数</div>
+    </div>
+    <div class="plan-stat">
+        <div class="plan-stat-value">{{ stats.active_plans }}</div>
+        <div class="plan-stat-label">进行中</div>
+    </div>
+    <div class="plan-stat">
+        <div class="plan-stat-value">{{ stats.completed_plans }}</div>
+        <div class="plan-stat-label">已完成</div>
+    </div>
+    <div class="plan-stat">
+        <div class="plan-stat-value">{{ stats.completion_rate }}%</div>
+        <div class="plan-stat-label">完成率</div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 学习计划列表 -->
+    <div class="col-lg-8 mb-4">
+        {% if plans %}
+            {% for plan in plans %}
+            <div class="card plan-card {{ 'completed' if plan.status == '已完成' else 'overdue' if plan.is_overdue else '' }} mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h5 class="mb-1">{{ plan.title }}</h5>
+                            <span class="badge bg-primary me-2">{{ plan.subject }}</span>
+                            <span class="badge bg-secondary">{{ plan.plan_type }}</span>
+                            {% if plan.is_overdue %}
+                                <span class="badge bg-danger ms-2">已过期</span>
+                            {% endif %}
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="editPlan({{ plan.id }})"><i class="bi bi-pencil"></i> 编辑</a></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="deletePlan({{ plan.id }})"><i class="bi bi-trash"></i> 删除</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    {% if plan.description %}
+                    <p class="text-muted mb-3">{{ plan.description }}</p>
+                    {% endif %}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <small class="text-muted">开始日期</small>
+                            <div>{{ plan.start_date }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">结束日期</small>
+                            <div>{{ plan.end_date }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">每日目标</small>
+                            <div>{{ plan.daily_goal or '未设置' }}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 进度条 -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>进度</small>
+                            <small>{{ plan.progress }}%</small>
+                        </div>
+                        <div class="plan-progress">
+                            <div class="plan-progress-bar" style="width: {{ plan.progress }}%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 任务列表 -->
+                    {% if plan.tasks %}
+                    <div class="mt-3">
+                        <h6 class="mb-2">任务清单</h6>
+                        <ul class="task-list">
+                            {% for task in plan.tasks %}
+                            <li class="task-item">
+                                <input type="checkbox" class="task-checkbox" 
+                                       {% if task.completed %}checked{% endif %}
+                                       onchange="toggleTask({{ plan.id }}, {{ task.id }}, this.checked)">
+                                <span class="task-content {% if task.completed %}completed{% endif %}">
+                                    {{ task.content }}
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-3 d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            创建于 {{ plan.created_at[:10] }}
+                        </small>
+                        <div>
+                            {% if plan.status != '已完成' %}
+                            <button class="btn btn-sm btn-success" onclick="completePlan({{ plan.id }})">
+                                <i class="bi bi-check"></i> 完成计划
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-calendar-plus text-muted" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">暂无学习计划</h5>
+                    <p class="text-muted">点击上方"新建计划"按钮创建你的第一个学习计划</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- 日历和快捷操作 -->
+    <div class="col-lg-4">
+        <!-- 日历 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar"></i> 学习日历</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="changeMonth(-1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span class="mx-2" id="currentMonth">{{ current_month }}</span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="changeMonth(1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="calendar-grid">
+                    <div class="calendar-header">日</div>
+                    <div class="calendar-header">一</div>
+                    <div class="calendar-header">二</div>
+                    <div class="calendar-header">三</div>
+                    <div class="calendar-header">四</div>
+                    <div class="calendar-header">五</div>
+                    <div class="calendar-header">六</div>
+                    
+                    {% for day in calendar_days %}
+                    <div class="calendar-day {{ 'today' if day.is_today else '' }} {{ 'has-plan' if day.has_plan else '' }}"
+                         onclick="selectDate('{{ day.date }}')">
+                        {{ day.day }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- 今日任务 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-list-check"></i> 今日任务
+            </div>
+            <div class="card-body">
+                {% if today_tasks %}
+                    <ul class="task-list">
+                        {% for task in today_tasks %}
+                        <li class="task-item">
+                            <input type="checkbox" class="task-checkbox" 
+                                   {% if task.completed %}checked{% endif %}
+                                   onchange="toggleTask({{ task.plan_id }}, {{ task.id }}, this.checked)">
+                            <span class="task-content {% if task.completed %}completed{% endif %}">
+                                {{ task.content }}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                        <p class="mt-2 mb-0">今日无待完成任务</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 学习建议 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i> 学习建议
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6>基于你的学习数据：</h6>
+                    <ul class="list-unstyled">
+                        {% for suggestion in suggestions %}
+                        <li class="mb-2">
+                            <i class="bi bi-arrow-right text-primary"></i> {{ suggestion }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新建计划模态框 -->
+<div class="modal fade" id="addPlanModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新建学习计划</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('add_study_plan') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">计划名称</label>
+                        <input type="text" class="form-control" name="title" required placeholder="例如：期末复习计划">
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">科目</label>
+                            <select class="form-select" name="subject" required>
+                                <option value="">选择科目</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject }}">{{ subject }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">计划类型</label>
+                            <select class="form-select" name="plan_type">
+                                <option value="日常学习">日常学习</option>
+                                <option value="考试复习">考试复习</option>
+                                <option value="弱项提升">弱项提升</option>
+                                <option value="专项突破">专项突破</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" class="form-control" name="start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" class="form-control" name="end_date" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">每日学习目标</label>
+                        <input type="text" class="form-control" name="daily_goal" placeholder="例如：完成2套试卷，复习10道错题">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">计划描述</label>
+                        <textarea class="form-control" name="description" rows="3" placeholder="详细描述你的学习计划..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">任务清单（每行一个任务）</label>
+                        <textarea class="form-control" name="tasks" rows="5" placeholder="任务1&#10;任务2&#10;任务3..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus"></i> 创建计划
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleTask(planId, taskId, completed) {
+        fetch(`/plans/${planId}/tasks/${taskId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ completed: completed })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 更新进度条
+                const progressBar = document.querySelector(`[data-plan="${planId}"] .plan-progress-bar`);
+                if (progressBar) {
+                    progressBar.style.width = data.progress + '%';
+                }
+            }
+        });
+    }
+    
+    function completePlan(planId) {
+        if (confirm('确认完成此学习计划？')) {
+            fetch(`/plans/${planId}/complete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        }
+    }
+    
+    function deletePlan(planId) {
+        if (confirm('确认删除此学习计划？此操作不可恢复。')) {
+            fetch(`/plans/${planId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        }
+    }
+    
+    function editPlan(planId) {
+        // 跳转到编辑页面或打开编辑模态框
+        window.location.href = `/plans/${planId}/edit`;
+    }
+    
+    function changeMonth(delta) {
+        // 切换月份
+        const currentMonth = document.getElementById('currentMonth').textContent;
+        // 这里可以添加AJAX请求来更新日历
+        console.log('Change month:', delta);
+    }
+    
+    function selectDate(date) {
+        console.log('Selected date:', date);
+    }
+</script>
+{% endblock %}

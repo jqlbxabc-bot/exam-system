@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}学习统计 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">📊 学习统计</h4>
+    <div>
+        <a href="{{ url_for('study_report') }}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-file-pdf"></i> 生成报告
+        </a>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScoreModal">
+            <i class="bi bi-plus"></i> 录入成绩
+        </button>
+    </div>
+</div>
+
+<!-- 科目统计 -->
+{% if subject_stats %}
+<div class="row mb-4">
+    {% for stat in subject_stats %}
+    <div class="col-md-4 col-lg-3 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">{{ stat.subject }}</h5>
+                <div class="mb-2">
+                    <span class="display-6 fw-bold text-primary">{{ "%.1f"|format(stat.avg_rate) }}%</span>
+                </div>
+                <div class="text-muted small">
+                    <div>考试次数: {{ stat.exam_count }}</div>
+                    <div>最高: {{ "%.1f"|format(stat.max_rate) }}% | 最低: {{ "%.1f"|format(stat.min_rate) }}%</div>
+                </div>
+                <div class="progress mt-2" style="height: 6px;">
+                    <div class="progress-bar" role="progressbar" style="width: {{ stat.avg_rate }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 成绩趋势图 -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-graph-up"></i> 成绩趋势</span>
+        <form method="GET" class="d-flex gap-2">
+            <select class="form-select form-select-sm" name="subject" onchange="this.form.submit()">
+                <option value="">全部科目</option>
+                {% for s in subjects %}
+                <option value="{{ s }}" {% if selected_subject == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    <div class="card-body">
+        <canvas id="scoreChart" height="100"></canvas>
+    </div>
+</div>
+
+<!-- 成绩记录 -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-list"></i> 成绩记录
+    </div>
+    <div class="card-body">
+        {% if stats %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>科目</th>
+                            <th>分数</th>
+                            <th>满分</th>
+                            <th>得分率</th>
+                            <th>班级排名</th>
+                            <th>班级均分</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in stats %}
+                        <tr>
+                            <td>{{ s.exam_date }}</td>
+                            <td><span class="badge bg-primary">{{ s.subject }}</span></td>
+                            <td class="fw-bold">{{ s.score }}</td>
+                            <td>{{ s.total_score }}</td>
+                            <td>
+                                {% set rate = (s.score / s.total_score * 100) %}
+                                <span class="{% if rate >= 90 %}text-success{% elif rate >= 70 %}text-primary{% elif rate >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(rate) }}%
+                                </span>
+                            </td>
+                            <td>{{ s.rank or '-' }}</td>
+                            <td>{{ "%.1f"|format(s.class_avg) if s.class_avg else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-bar-chart" style="font-size: 3rem;"></i>
+                <p class="mt-2">暂无成绩记录</p>
+                <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#addScoreModal">
+                    录入第一次成绩
+                </button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 录入成绩模态框 -->
+<div class="modal fade" id="addScoreModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">录入成绩</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_study_stat') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">科目 <span class="text-danger">*</span></label>
+                        <select class="form-select" name="subject" required>
+                            <option value="">选择科目</option>
+                            {% for s in subjects %}
+                            <option value="{{ s }}">{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">考试日期 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="exam_date" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">我的分数 <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="score" required min="0" step="0.5">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">满分 <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="total_score" required min="1" value="150">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">班级排名</label>
+                            <input type="number" class="form-control" name="rank" min="1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">班级均分</label>
+                            <input type="number" class="form-control" name="class_avg" min="0" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// 成绩趋势图
+const ctx = document.getElementById('scoreChart').getContext('2d');
+const stats = {{ stats | tojson }};
+
+if (stats.length > 0) {
+    const labels = stats.map(s => s.exam_date).reverse();
+    const scores = stats.map(s => (s.score / s.total_score * 100)).reverse();
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '得分率 (%)',
+                data: scores,
+                borderColor: '#4f46e5',
+                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 50,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+{# 分页宏 #}
+{% macro render_pagination(pagination, endpoint, **kwargs) %}
+{% if pagination.pages > 1 %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center mb-0">
+        {# 上一页 #}
+        {% if pagination.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for(endpoint, page=pagination.prev_num, **kwargs) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+        </li>
+        {% endif %}
+        
+        {# 页码 #}
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page_num %}
+                {% if page_num == pagination.page %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% else %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for(endpoint, page=page_num, **kwargs) }}">{{ page_num }}</a>
+                </li>
+                {% endif %}
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">...</span>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {# 下一页 #}
+        {% if pagination.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for(endpoint, page=pagination.next_num, **kwargs) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+
+<div class="text-center text-muted mt-2">
+    <small>共 {{ pagination.total }} 条记录，第 {{ pagination.page }}/{{ pagination.pages }} 页</small>
+</div>
+{% endif %}
+{% endmacro %}

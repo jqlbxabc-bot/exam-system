@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+
+{% block title %}批量导入 - 试卷管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-zone {
+        border: 3px dashed var(--border-color);
+        border-radius: 16px;
+        padding: 60px 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: var(--bg-body);
+    }
+    
+    .upload-zone:hover,
+    .upload-zone.dragover {
+        border-color: var(--primary);
+        background: rgba(79, 70, 229, 0.05);
+    }
+    
+    .upload-icon {
+        font-size: 4rem;
+        color: var(--primary);
+        margin-bottom: 20px;
+    }
+    
+    .file-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .file-item {
+        padding: 12px 15px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .file-item:last-child {
+        border-bottom: none;
+    }
+    
+    .file-icon {
+        font-size: 1.5rem;
+        color: var(--primary);
+    }
+    
+    .file-info {
+        flex: 1;
+    }
+    
+    .file-name {
+        font-weight: 500;
+        margin-bottom: 4px;
+    }
+    
+    .file-size {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    
+    .file-status {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+    
+    .file-status.pending {
+        background: #e5e7eb;
+        color: #374151;
+    }
+    
+    .file-status.uploading {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    
+    .file-status.success {
+        background: #d1fae5;
+        color: #059669;
+    }
+    
+    .file-status.error {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    
+    .progress-container {
+        margin-top: 20px;
+    }
+    
+    .progress-bar {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--border-color);
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary) 0%, #818cf8 100%);
+        transition: width 0.3s;
+    }
+    
+    .upload-options {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">📁 批量导入试卷</h4>
+    <a href="{{ url_for('exam_list') }}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left"></i> 返回试卷列表
+    </a>
+</div>
+
+<div class="row">
+    <!-- 上传区域 -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                    </div>
+                    <h5>拖拽文件到此处或点击选择</h5>
+                    <p class="text-muted">支持 PDF、Word、图片等格式，可同时选择多个文件</p>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.bmp" 
+                           style="display: none;">
+                    <button class="btn btn-primary mt-3" onclick="document.getElementById('fileInput').click()">
+                        <i class="bi bi-folder2-open"></i> 选择文件
+                    </button>
+                </div>
+                
+                <!-- 文件列表 -->
+                <div id="fileListContainer" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+                        <h5 class="mb-0">已选择的文件</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearFiles()">
+                                <i class="bi bi-trash"></i> 清空
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="startUpload()">
+                                <i class="bi bi-upload"></i> 开始上传
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="file-list" id="fileList">
+                        <!-- 文件项将在这里动态添加 -->
+                    </div>
+                    
+                    <!-- 上传进度 -->
+                    <div class="progress-container" id="progressContainer" style="display: none;">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>上传进度</span>
+                            <span id="progressText">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                        </div>
+                        <div class="text-muted small mt-2" id="uploadStatus">
+                            准备上传...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 上传选项 -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> 导入设置
+            </div>
+            <div class="card-body">
+                <form id="uploadSettings">
+                    <div class="mb-3">
+                        <label class="form-label">默认科目</label>
+                        <select class="form-select" name="default_subject" id="defaultSubject">
+                            <option value="">自动识别</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject }}">{{ subject }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">默认年级</label>
+                        <select class="form-select" name="default_grade" id="defaultGrade">
+                            <option value="">自动识别</option>
+                            {% for grade in grades %}
+                            <option value="{{ grade }}">{{ grade }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">默认试卷类型</label>
+                        <select class="form-select" name="default_exam_type" id="defaultExamType">
+                            <option value="月考">月考</option>
+                            <option value="期中">期中</option>
+                            <option value="期末">期末</option>
+                            <option value="模拟">模拟</option>
+                            <option value="高考真题">高考真题</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="autoRecognize" checked>
+                            <label class="form-check-label" for="autoRecognize">
+                                自动识别试卷信息
+                            </label>
+                        </div>
+                        <div class="form-text">使用AI自动识别试卷标题、科目等信息</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="autoAnalyze">
+                            <label class="form-check-label" for="autoAnalyze">
+                                导入后自动分析
+                            </label>
+                        </div>
+                        <div class="form-text">导入完成后自动进行AI分析</div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 使用说明 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> 使用说明
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        支持同时上传多个文件
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        支持 PDF、Word、图片格式
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        AI自动识别试卷信息
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        文件大小限制：100MB/个
+                    </li>
+                    <li>
+                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                        请确保文件名清晰可辨
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedFiles = [];
+    
+    // 上传区域事件
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+    
+    // 拖拽事件
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+    
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+    
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+    
+    uploadZone.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
+    
+    function handleFiles(files) {
+        for (let file of files) {
+            // 检查文件类型
+            const allowedTypes = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'bmp'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            if (allowedTypes.includes(ext)) {
+                selectedFiles.push({
+                    file: file,
+                    id: Date.now() + Math.random(),
+                    status: 'pending',
+                    progress: 0
+                });
+            }
+        }
+        
+        updateFileList();
+    }
+    
+    function updateFileList() {
+        const container = document.getElementById('fileListContainer');
+        const fileList = document.getElementById('fileList');
+        
+        if (selectedFiles.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        fileList.innerHTML = '';
+        
+        selectedFiles.forEach((item, index) => {
+            const ext = item.file.name.split('.').pop().toLowerCase();
+            let icon = 'bi-file-earmark';
+            if (ext === 'pdf') icon = 'bi-file-earmark-pdf';
+            else if (['doc', 'docx'].includes(ext)) icon = 'bi-file-earmark-word';
+            else if (['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)) icon = 'bi-file-earmark-image';
+            
+            const size = formatFileSize(item.file.size);
+            
+            fileList.innerHTML += `
+                <div class="file-item" data-id="${item.id}">
+                    <i class="bi ${icon} file-icon"></i>
+                    <div class="file-info">
+                        <div class="file-name">${item.file.name}</div>
+                        <div class="file-size">${size}</div>
+                    </div>
+                    <span class="file-status ${item.status}">${getStatusText(item.status)}</span>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            `;
+        });
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    
+    function getStatusText(status) {
+        const texts = {
+            'pending': '待上传',
+            'uploading': '上传中',
+            'success': '已完成',
+            'error': '失败'
+        };
+        return texts[status] || status;
+    }
+    
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        updateFileList();
+    }
+    
+    function clearFiles() {
+        selectedFiles = [];
+        updateFileList();
+    }
+    
+    async function startUpload() {
+        if (selectedFiles.length === 0) {
+            alert('请先选择文件');
+            return;
+        }
+        
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const uploadStatus = document.getElementById('uploadStatus');
+        
+        progressContainer.style.display = 'block';
+        
+        const totalFiles = selectedFiles.length;
+        let completedFiles = 0;
+        
+        // 获取设置
+        const settings = {
+            default_subject: document.getElementById('defaultSubject').value,
+            default_grade: document.getElementById('defaultGrade').value,
+            default_exam_type: document.getElementById('defaultExamType').value,
+            auto_recognize: document.getElementById('autoRecognize').checked,
+            auto_analyze: document.getElementById('autoAnalyze').checked
+        };
+        
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const item = selectedFiles[i];
+            item.status = 'uploading';
+            updateFileList();
+            
+            uploadStatus.textContent = `正在上传 ${i + 1}/${totalFiles}: ${item.file.name}`;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', item.file);
+                formData.append('subject', settings.default_subject);
+                formData.append('grade', settings.default_grade);
+                formData.append('exam_type', settings.default_exam_type);
+                formData.append('auto_recognize', settings.auto_recognize ? 'on' : '');
+                formData.append('auto_analyze', settings.auto_analyze ? 'on' : '');
+                
+                const response = await fetch('/exams/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    item.status = 'success';
+                    completedFiles++;
+                } else {
+                    item.status = 'error';
+                }
+            } catch (error) {
+                item.status = 'error';
+                console.error('Upload error:', error);
+            }
+            
+            // 更新进度
+            const progress = Math.round((completedFiles / totalFiles) * 100);
+            progressFill.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            
+            updateFileList();
+        }
+        
+        uploadStatus.textContent = `上传完成！成功 ${completedFiles}/${totalFiles} 个文件`;
+        
+        if (completedFiles === totalFiles) {
+            setTimeout(() => {
+                if (confirm('所有文件上传成功！是否跳转到试卷列表？')) {
+                    window.location.href = '/exams';
+                }
+            }, 1000);
+        }
+    }
+</script>
+{% endblock %}

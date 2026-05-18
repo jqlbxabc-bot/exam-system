@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}复习提醒 - 试卷管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .review-card {
+        border-left: 4px solid;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .review-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .review-card.urgent {
+        border-left-color: #ef4444;
+    }
+    
+    .review-card.today {
+        border-left-color: #f59e0b;
+    }
+    
+    .review-card.upcoming {
+        border-left-color: #10b981;
+    }
+    
+    .review-card.completed {
+        border-left-color: #6b7280;
+        opacity: 0.7;
+    }
+    
+    .mastery-stars {
+        color: #f59e0b;
+    }
+    
+    .review-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .review-timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border-color);
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 20px;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--primary);
+        border: 2px solid var(--bg-card);
+    }
+    
+    .timeline-item.urgent::before {
+        background: #ef4444;
+    }
+    
+    .timeline-item.today::before {
+        background: #f59e0b;
+    }
+    
+    .review-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .review-stat {
+        text-align: center;
+        padding: 15px;
+        border-radius: 8px;
+        background: var(--bg-body);
+    }
+    
+    .review-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .review-stat-label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    
+    .ebbinghaus-curve {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">🔔 复习提醒</h4>
+    <div>
+        <a href="{{ url_for('mistake_list') }}" class="btn btn-outline-primary">
+            <i class="bi bi-journal-x"></i> 查看全部错题
+        </a>
+    </div>
+</div>
+
+<!-- 艾宾浩斯遗忘曲线说明 -->
+<div class="ebbinghaus-curve">
+    <h5 class="mb-3"><i class="bi bi-info-circle"></i> 艾宾浩斯遗忘曲线复习法</h5>
+    <p class="mb-2">根据遗忘曲线理论，合理安排复习时间可以大幅提高记忆效果：</p>
+    <div class="row">
+        <div class="col-md-4">
+            <strong>短期复习：</strong>20分钟 → 1小时 → 9小时
+        </div>
+        <div class="col-md-4">
+            <strong>中期复习：</strong>1天 → 2天 → 6天
+        </div>
+        <div class="col-md-4">
+            <strong>长期复习：</strong>31天后巩固
+        </div>
+    </div>
+</div>
+
+<!-- 复习统计 -->
+<div class="review-stats">
+    <div class="review-stat">
+        <div class="review-stat-value">{{ review_stats.urgent }}</div>
+        <div class="review-stat-label">急需复习</div>
+    </div>
+    <div class="review-stat">
+        <div class="review-stat-value">{{ review_stats.today }}</div>
+        <div class="review-stat-label">今日待复习</div>
+    </div>
+    <div class="review-stat">
+        <div class="review-stat-value">{{ review_stats.upcoming }}</div>
+        <div class="review-stat-label">即将到期</div>
+    </div>
+    <div class="review-stat">
+        <div class="review-stat-value">{{ review_stats.completed }}</div>
+        <div class="review-stat-label">已完成复习</div>
+    </div>
+</div>
+
+<!-- 筛选选项 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">显示类型</label>
+                <select class="form-select" name="filter">
+                    <option value="all" {% if filter == 'all' %}selected{% endif %}>全部</option>
+                    <option value="urgent" {% if filter == 'urgent' %}selected{% endif %}>急需复习</option>
+                    <option value="today" {% if filter == 'today' %}selected{% endif %}>今日待复习</option>
+                    <option value="upcoming" {% if filter == 'upcoming' %}selected{% endif %}>即将到期</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">科目</label>
+                <select class="form-select" name="subject">
+                    <option value="">全部科目</option>
+                    {% for subject in subjects %}
+                    <option value="{{ subject }}" {% if selected_subject == subject %}selected{% endif %}>{{ subject }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 复习列表 -->
+{% if review_items %}
+    <div class="review-timeline">
+        {% for item in review_items %}
+        <div class="timeline-item {{ item.priority }}">
+            <div class="card review-card {{ item.priority }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="badge bg-primary me-2">{{ item.subject }}</span>
+                            <span class="badge bg-secondary">{{ item.question_type }}</span>
+                            {% if item.priority == 'urgent' %}
+                                <span class="badge bg-danger ms-2">急需复习</span>
+                            {% elif item.priority == 'today' %}
+                                <span class="badge bg-warning ms-2">今日待复习</span>
+                            {% elif item.priority == 'upcoming' %}
+                                <span class="badge bg-success ms-2">即将到期</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-muted small">
+                            复习日期: {{ item.next_review_date }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>题目：</h6>
+                        <p class="mb-0">{{ item.content[:200] }}{% if item.content|length > 200 %}...{% endif %}</p>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        {% if item.correct_answer %}
+                        <div class="col-md-6">
+                            <div class="p-2 bg-success bg-opacity-10 rounded">
+                                <small class="text-success"><i class="bi bi-check-circle"></i> 正确答案</small>
+                                <p class="mb-0 small">{{ item.correct_answer[:100] }}{% if item.correct_answer|length > 100 %}...{% endif %}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if item.user_answer %}
+                        <div class="col-md-6">
+                            <div class="p-2 bg-danger bg-opacity-10 rounded">
+                                <small class="text-danger"><i class="bi bi-x-circle"></i> 我的答案</small>
+                                <p class="mb-0 small">{{ item.user_answer[:100] }}{% if item.user_answer|length > 100 %}...{% endif %}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="me-2">掌握程度：</span>
+                            <span class="mastery-stars">
+                                {% for i in range(5) %}
+                                    {% if i < item.mastery_level %}
+                                        <i class="bi bi-star-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-star"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </span>
+                        </div>
+                        <div>
+                            <small class="text-muted me-3">复习次数: {{ item.review_count }}</small>
+                            <button class="btn btn-sm btn-success" onclick="markReviewed({{ item.id }})">
+                                <i class="bi bi-check"></i> 已复习
+                            </button>
+                            <a href="{{ url_for('practice_start', mistake_id=item.id) }}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil"></i> 练习
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+            <h5 class="mt-3">太棒了！</h5>
+            <p class="text-muted">目前没有需要复习的错题，继续保持！</p>
+            <a href="{{ url_for('mistake_list') }}" class="btn btn-primary">
+                <i class="bi bi-journal-x"></i> 查看错题本
+            </a>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function markReviewed(mistakeId) {
+        if (confirm('确认已完成复习？')) {
+            fetch(`/mistakes/${mistakeId}/review`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 刷新页面
+                    location.reload();
+                } else {
+                    alert('操作失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('操作失败');
+                console.error('Error:', error);
+            });
+        }
+    }
+</script>
+{% endblock %}

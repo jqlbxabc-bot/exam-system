@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% from "macros/pagination.html" import render_pagination %}
+
+{% block title %}试卷列表 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">📚 试卷管理</h4>
+    <div>
+        <a href="{{ url_for('batch_import') }}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-folder-plus"></i> 批量导入
+        </a>
+        <a href="{{ url_for('upload_exam') }}" class="btn btn-primary">
+            <i class="bi bi-cloud-upload"></i> 上传试卷
+        </a>
+    </div>
+</div>
+
+<!-- 搜索筛选 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <input type="text" class="form-control" name="keyword" placeholder="搜索试卷名称..." 
+                       value="{{ keyword }}">
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="subject">
+                    <option value="">全部科目</option>
+                    {% for s in subjects %}
+                    <option value="{{ s }}" {% if subject == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="grade">
+                    <option value="">全部年级</option>
+                    {% for g in grades %}
+                    <option value="{{ g }}" {% if grade == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="exam_type">
+                    <option value="">全部类型</option>
+                    {% for t in exam_types %}
+                    <option value="{{ t }}" {% if exam_type == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="bi bi-search"></i> 搜索
+                </button>
+                <a href="{{ url_for('exam_list') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 试卷列表 -->
+<div class="card">
+    <div class="card-body">
+        {% if exams %}
+            <div class="row">
+                {% for exam in exams %}
+                <div class="col-lg-4 col-md-6 mb-4">
+                    <div class="card exam-card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">
+                                    <a href="{{ url_for('exam_detail', exam_id=exam.id) }}" 
+                                       class="text-decoration-none text-dark">
+                                        {{ exam.title }}
+                                    </a>
+                                </h6>
+                                <span class="badge bg-primary subject-badge">{{ exam.subject }}</span>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <i class="bi bi-mortarboard"></i> {{ exam.grade or '高中' }} | 
+                                    <i class="bi bi-tag"></i> {{ exam.exam_type }}
+                                </small>
+                            </div>
+                            {% if exam.description %}
+                            <p class="card-text text-muted small" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                {{ exam.description }}
+                            </p>
+                            {% endif %}
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="text-primary fw-bold">{{ exam.total_score }}分</span>
+                                <small class="text-muted">{{ exam.created_at[:10] }}</small>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top-0">
+                            <div class="d-flex justify-content-between">
+                                <button class="btn btn-sm btn-outline-success" 
+                                        onclick="previewExam({{ exam.id }}, '{{ exam.title }}')">
+                                    <i class="bi bi-eye"></i> 预览
+                                </button>
+                                <a href="{{ url_for('exam_detail', exam_id=exam.id) }}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-info-circle"></i> 详情
+                                </a>
+                                <form method="POST" action="{{ url_for('delete_exam', exam_id=exam.id) }}" 
+                                      onsubmit="return confirm('确定要删除吗？')" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <p class="mt-2">暂无试卷</p>
+                <a href="{{ url_for('upload_exam') }}" class="btn btn-primary mt-2">
+                    <i class="bi bi-cloud-upload"></i> 上传第一份试卷
+                </a>
+            </div>
+        {% endif %}
+        
+        <!-- 分页 -->
+        {% if pagination %}
+            {{ render_pagination(pagination, 'exam_list', keyword=keyword, subject=subject, grade=grade, exam_type=exam_type) }}
+        {% endif %}
+    </div>
+</div>
+
+<!-- 试卷预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="previewTitle">试卷预览</h5>
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-sm btn-outline-primary me-2" id="prevPageBtn" onclick="changePage(-1)" disabled>
+                        <i class="bi bi-chevron-left"></i> 上一页
+                    </button>
+                    <span id="pageInfo" class="me-2">第 1 页</span>
+                    <button class="btn btn-sm btn-outline-primary me-2" id="nextPageBtn" onclick="changePage(1)" disabled>
+                        下一页 <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button type="button" class="btn-close ms-2" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" style="min-height: 500px; background-color: #f8f9fa;">
+                <div id="previewContent" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在加载试卷...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="previewInfo" class="text-muted me-auto"></span>
+                <a id="viewDetailBtn" href="#" class="btn btn-primary">
+                    <i class="bi bi-info-circle"></i> 查看详情
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentExamId = null;
+let currentPage = 1;
+let totalPages = 1;
+let examFiles = [];
+
+function previewExam(examId, examTitle) {
+    currentExamId = examId;
+    currentPage = 1;
+    document.getElementById('previewTitle').textContent = examTitle + ' - 预览';
+    document.getElementById('viewDetailBtn').href = `/exams/${examId}`;
+    
+    // 显示模态框
+    var modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    modal.show();
+    
+    // 加载试卷文件
+    loadExamFiles(examId);
+}
+
+function loadExamFiles(examId) {
+    document.getElementById('previewContent').innerHTML = `
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">加载中...</span>
+        </div>
+        <p class="mt-2 text-muted">正在加载试卷...</p>
+    `;
+    
+    fetch(`/api/exams/${examId}/files`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.files && data.files.length > 0) {
+                examFiles = data.files;
+                totalPages = examFiles.length;
+                updatePageInfo();
+                showCurrentPage();
+            } else {
+                document.getElementById('previewContent').innerHTML = `
+                    <div class="py-5">
+                        <i class="bi bi-file-earmark-x text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3 text-muted">暂无试卷文件</p>
+                        <p class="text-muted small">请先上传试卷图片或PDF文件</p>
+                    </div>
+                `;
+                document.getElementById('prevPageBtn').disabled = true;
+                document.getElementById('nextPageBtn').disabled = true;
+                document.getElementById('pageInfo').textContent = '无文件';
+                document.getElementById('previewInfo').textContent = '';
+            }
+        })
+        .catch(error => {
+            document.getElementById('previewContent').innerHTML = `
+                <div class="py-5">
+                    <i class="bi bi-exclamation-circle text-danger" style="font-size: 3rem;"></i>
+                    <p class="mt-3 text-danger">加载失败: ${error}</p>
+                </div>
+            `;
+        });
+}
+
+function showCurrentPage() {
+    if (examFiles.length === 0) return;
+    
+    const file = examFiles[currentPage - 1];
+    const content = document.getElementById('previewContent');
+    
+    // 使用API返回的url字段
+    const imgUrl = file.url || '';
+    
+    if (file.file_type && ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(file.file_type.toLowerCase())) {
+        // 图片文件
+        content.innerHTML = `
+            <img src="${imgUrl}" class="img-fluid" style="max-height: 70vh;" 
+                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'py-5\\'><i class=\\'bi bi-exclamation-circle text-danger\\' style=\\'font-size: 3rem;\\'></i><p class=\\'mt-3 text-danger\\'>图片加载失败</p><p class=\\'text-muted small\\'>URL: ${imgUrl}</p></div>';">
+        `;
+    } else if (file.file_type && file.file_type.toLowerCase() === 'pdf') {
+        // PDF文件
+        content.innerHTML = `
+            <iframe src="${imgUrl}" style="width: 100%; height: 70vh; border: none;"></iframe>
+        `;
+    } else {
+        // 其他文件
+        content.innerHTML = `
+            <div class="py-5">
+                <i class="bi bi-file-earmark text-muted" style="font-size: 3rem;"></i>
+                <p class="mt-3 text-muted">${file.file_name}</p>
+                <p class="text-muted small">此文件类型不支持预览</p>
+            </div>
+        `;
+    }
+    
+    document.getElementById('previewInfo').textContent = `文件: ${file.file_name}`;
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    if (currentPage < 1) currentPage = 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+    updatePageInfo();
+    showCurrentPage();
+}
+
+function updatePageInfo() {
+    document.getElementById('pageInfo').textContent = `第 ${currentPage} / ${totalPages} 页`;
+    document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+    document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+}
+</script>
+{% endblock %}

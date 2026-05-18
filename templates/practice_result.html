@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}练习结果 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0"><i class="bi bi-trophy"></i> 练习结果</h4>
+        <small class="text-muted">{{ practice_session.title or '专项练习' }}</small>
+    </div>
+    <div>
+        <a href="{{ url_for('practice_list') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+        {% if practice_session.mistake_id %}
+        <form method="POST" action="{{ url_for('start_practice', mistake_id=practice_session.mistake_id) }}" class="d-inline">
+            <button type="submit" class="btn btn-warning">
+                <i class="bi bi-arrow-repeat"></i> 再次练习
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 成绩概览 -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">得分</h5>
+                {% if practice_session.score >= 80 %}
+                    <h2 class="text-success">{{ practice_session.score|round(1) }}%</h2>
+                {% elif practice_session.score >= 60 %}
+                    <h2 class="text-warning">{{ practice_session.score|round(1) }}%</h2>
+                {% else %}
+                    <h2 class="text-danger">{{ practice_session.score|round(1) }}%</h2>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">正确率</h5>
+                <h2>{{ practice_session.correct_count }}/{{ practice_session.total_questions }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">状态</h5>
+                {% if practice_session.score >= 80 %}
+                    <h2 class="text-success"><i class="bi bi-check-circle"></i> 优秀</h2>
+                {% elif practice_session.score >= 60 %}
+                    <h2 class="text-warning"><i class="bi bi-exclamation-circle"></i> 及格</h2>
+                {% else %}
+                    <h2 class="text-danger"><i class="bi bi-x-circle"></i> 需加强</h2>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 题目详情 -->
+{% for question in questions %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <strong>第{{ question.question_number }}题</strong>
+            <span class="badge bg-info ms-2">{{ question.question_type }}</span>
+        </span>
+        {% if question.is_correct %}
+            <span class="badge bg-success"><i class="bi bi-check"></i> 正确</span>
+        {% elif question.user_answer %}
+            <span class="badge bg-danger"><i class="bi bi-x"></i> 错误</span>
+        {% else %}
+            <span class="badge bg-secondary">未作答</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <!-- 题目内容 -->
+        <div class="mb-3" style="white-space: pre-wrap; line-height: 1.8;">{{ question.content }}</div>
+        
+        {% if question.options %}
+        <div class="mb-3">
+            {% for option in question.options.split('\n') if option.strip() %}
+            <div class="form-check mb-2 disabled">
+                <input class="form-check-input" type="radio" disabled
+                       {{ 'checked' if question.user_answer and option.strip()[:1] == question.user_answer[:1] }}>
+                <label class="form-check-label">{{ option.strip() }}</label>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- 答案对比 -->
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="p-3 rounded {{ 'bg-success-light' if question.is_correct else 'bg-danger-light' }}" 
+                     style="background-color: {{ '#d4edda' if question.is_correct else '#f8d7da' }};">
+                    <strong>你的答案：</strong>
+                    <div class="mt-1">{{ question.user_answer or '未作答' }}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-success-light" style="background-color: #d4edda;">
+                    <strong>正确答案：</strong>
+                    <div class="mt-1">{{ question.correct_answer }}</div>
+                </div>
+            </div>
+        </div>
+        
+        {% if not question.is_correct and question.user_answer %}
+        <!-- 改错区域 -->
+        <div class="mt-4 p-3 border rounded" id="correction_{{ question.id }}">
+            <h6><i class="bi bi-pencil"></i> 改错练习</h6>
+            <div class="mb-3">
+                <textarea class="form-control" id="correction_input_{{ question.id }}" rows="2" 
+                          placeholder="请重新作答..."></textarea>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="submitCorrection({{ question.id }}, {{ practice_session.id }})">
+                <i class="bi bi-check"></i> 提交改错
+            </button>
+            <div id="correction_result_{{ question.id }}" class="mt-3" style="display: none;"></div>
+        </div>
+        {% endif %}
+        
+        {% if question.analysis %}
+        <!-- 解析 -->
+        <div class="mt-4">
+            <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" 
+                    data-bs-target="#analysis_{{ question.id }}">
+                <i class="bi bi-lightbulb"></i> 查看解析
+            </button>
+            <div class="collapse mt-3" id="analysis_{{ question.id }}">
+                <div class="p-3 bg-light rounded" style="white-space: pre-wrap;">{{ question.analysis }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+<script>
+function submitCorrection(questionId, sessionId) {
+    const input = document.getElementById(`correction_input_${questionId}`);
+    const resultDiv = document.getElementById(`correction_result_${questionId}`);
+    
+    if (!input.value.trim()) {
+        alert('请输入你的答案');
+        return;
+    }
+    
+    fetch(`/practice/${sessionId}/correction`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `question_id=${questionId}&correction=${encodeURIComponent(input.value.trim())}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.style.display = 'block';
+            if (data.is_correct) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i> <strong>改对了！</strong>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> <strong>还是不对</strong>
+                        <br>正确答案：${data.correct_answer}
+                        <br><strong>解析：</strong>${data.analysis}
+                    </div>
+                `;
+            }
+            input.value = '';
+        } else {
+            alert('提交失败: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('请求失败: ' + error);
+    });
+}
+</script>
+{% endblock %}

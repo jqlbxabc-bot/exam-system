@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}上传试卷 - 试卷管理系统{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h4>📤 上传试卷</h4>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            <div class="row">
+                <!-- 基本信息 -->
+                <div class="col-md-8">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-info-circle"></i> 基本信息
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">试卷名称</label>
+                                <input type="text" class="form-control" name="title"
+                                       placeholder="留空则自动识别，例如：2026年高三数学月考试卷">
+                                <div class="form-text">留空将根据文件内容自动生成标题</div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">科目</label>
+                                    <select class="form-select" name="subject">
+                                        <option value="">自动识别</option>
+                                        {% for s in subjects %}
+                                        <option value="{{ s }}">{{ s }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">年级</label>
+                                    <select class="form-select" name="grade">
+                                        <option value="">选择年级</option>
+                                        {% for g in grades %}
+                                        <option value="{{ g }}">{{ g }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">考试类型</label>
+                                    <select class="form-select" name="exam_type">
+                                        {% for t in exam_types %}
+                                        <option value="{{ t }}">{{ t }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">考试日期</label>
+                                    <input type="date" class="form-control" name="exam_date">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">总分</label>
+                                    <input type="number" class="form-control" name="total_score" 
+                                           value="150" min="0" step="1">
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">试卷描述</label>
+                                <textarea class="form-control" name="description" rows="3" 
+                                          placeholder="输入试卷的简要描述..."></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="auto_recognize" 
+                                           id="auto_recognize" checked>
+                                    <label class="form-check-label" for="auto_recognize">
+                                        <i class="bi bi-robot"></i> 启用AI自动识别
+                                    </label>
+                                    <div class="form-text">上传后自动识别试卷科目、年级、题型等信息</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件上传 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-cloud-upload"></i> 上传文件
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">主文件（试卷图片或文档）</label>
+                                <input type="file" class="form-control" name="file" 
+                                       accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx">
+                                <div class="form-text">支持格式：JPG、PNG、PDF、Word文档，最大50MB</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">多页上传（可选）</label>
+                                <input type="file" class="form-control" name="files" multiple
+                                       accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf">
+                                <div class="form-text">如果试卷有多页，可以一次选择多个文件</div>
+                            </div>
+                            
+                            <!-- 文件预览 -->
+                            <div id="filePreview" class="row mt-3" style="display: none;">
+                                <div class="col-12">
+                                    <h6>已选择的文件：</h6>
+                                    <div id="fileList" class="list-group"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧提示 -->
+                <div class="col-md-4">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-lightbulb"></i> 上传提示
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <h6>📷 图片上传</h6>
+                                <ul class="small text-muted">
+                                    <li>支持手机拍照上传</li>
+                                    <li>建议清晰拍摄，便于AI识别</li>
+                                    <li>多页试卷请分别上传</li>
+                                </ul>
+                            </div>
+                            <div class="mb-3">
+                                <h6>📄 文档上传</h6>
+                                <ul class="small text-muted">
+                                    <li>支持PDF、Word格式</li>
+                                    <li>系统会自动提取内容</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h6>🤖 AI分析</h6>
+                                <ul class="small text-muted">
+                                    <li>上传后可进行AI分析</li>
+                                    <li>支持多种分析类型</li>
+                                    <li>分析结果自动保存</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-shield-check"></i> 存储说明
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted mb-2">
+                                <i class="bi bi-check-circle text-success"></i> 
+                                文件将安全存储
+                            </p>
+                            <p class="small text-muted mb-2">
+                                <i class="bi bi-check-circle text-success"></i> 
+                                支持云端备份
+                            </p>
+                            <p class="small text-muted mb-0">
+                                <i class="bi bi-check-circle text-success"></i> 
+                                随时可以下载
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <button type="submit" class="btn btn-primary btn-lg px-5">
+                    <i class="bi bi-cloud-upload"></i> 上传试卷
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const fileInput = document.querySelector('input[name="file"]');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        e.preventDefault();
+        alert('请至少上传一个试卷文件');
+        return false;
+    }
+    
+    // 显示上传中提示
+    const btn = this.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 上传中...';
+});
+
+// 文件预览
+document.querySelector('input[name="files"]').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const preview = document.getElementById('filePreview');
+    const fileList = document.getElementById('fileList');
+    
+    if (files.length > 0) {
+        preview.style.display = 'block';
+        fileList.innerHTML = '';
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const item = document.createElement('div');
+            item.className = 'list-group-item d-flex justify-content-between align-items-center';
+            item.innerHTML = `
+                <span>
+                    <i class="bi bi-file-earmark"></i> ${file.name}
+                    <small class="text-muted ms-2">(${(file.size / 1024 / 1024).toFixed(2)} MB)</small>
+                </span>
+                <span class="badge bg-primary">第${i + 1}页</span>
+            `;
+            fileList.appendChild(item);
+        }
+    } else {
+        preview.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}
