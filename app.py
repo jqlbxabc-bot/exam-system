@@ -1796,10 +1796,7 @@ def _process_gaokao_import(task_id, saved_files, tmp_dir):
                 continue
             
             if not text_content or len(text_content.strip()) < 50:
-                if filename.endswith('.doc') and not filename.endswith('.docx'):
-                    task['errors'].append(f'{finfo["name"]}: .doc格式需要安装pywin32库，或转换为.docx格式')
-                else:
-                    task['errors'].append(f'{finfo["name"]}: 文件内容过少或无法提取文字')
+                task['errors'].append(f'{finfo["name"]}: 无法提取文字内容，请确认文件是否为有效文档。建议转为.docx或.pdf格式后重试')
                 continue
             
             text_content = text_content[:8000]
@@ -2016,8 +2013,9 @@ def _extract_docx_text(file_path):
     import os
     ext = os.path.splitext(file_path)[1].lower()
     
-    # .doc格式使用win32com（Windows COM接口）
+    # .doc格式处理
     if ext == '.doc':
+        # 方法1: win32com（仅Windows）
         try:
             import win32com.client
             import pythoncom
@@ -2029,18 +2027,33 @@ def _extract_docx_text(file_path):
             doc.Close()
             word.Quit()
             pythoncom.CoUninitialize()
-            return text
+            if text and len(text.strip()) > 50:
+                return text
         except Exception as e:
             print(f".doc提取失败(win32com): {e}")
-            # 回退：尝试用antiword
-            try:
-                import subprocess
-                result = subprocess.run(['antiword', file_path], capture_output=True, text=True, encoding='utf-8')
-                if result.returncode == 0:
-                    return result.stdout
-            except:
-                pass
-            return ''
+        
+        # 方法2: antiword（Linux）
+        try:
+            import subprocess
+            result = subprocess.run(['antiword', file_path], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            if result.returncode == 0 and result.stdout and len(result.stdout.strip()) > 50:
+                print(f".doc提取成功(antiword): {len(result.stdout)} 字符")
+                return result.stdout
+        except Exception as e:
+            print(f".doc提取失败(antiword): {e}")
+        
+        # 方法3: catdoc（Linux备选）
+        try:
+            import subprocess
+            result = subprocess.run(['catdoc', '-w', file_path], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            if result.returncode == 0 and result.stdout and len(result.stdout.strip()) > 50:
+                print(f".doc提取成功(catdoc): {len(result.stdout)} 字符")
+                return result.stdout
+        except Exception as e:
+            print(f".doc提取失败(catdoc): {e}")
+        
+        print(f".doc所有提取方法均失败")
+        return ''
     
     # .docx格式使用python-docx
     try:
