@@ -1173,39 +1173,42 @@ def delete_gaokao_question(question_id):
     conn.close()
 
 def get_gaokao_category_tree():
-    """获取高考真题分类树"""
+    """获取高考真题分类树 - 返回 {subject: {category: {question_type: count}}}"""
     conn = get_connection()
-    cur = _execute(conn, '''SELECT DISTINCT subject, category, COUNT(*) as cnt 
+    cur = _execute(conn, '''SELECT subject, category, question_type, COUNT(*) as cnt 
                            FROM gaokao_questions 
-                           WHERE category != '' 
-                           GROUP BY subject, category 
-                           ORDER BY subject, category''')
+                           GROUP BY subject, category, question_type
+                           ORDER BY subject, category, question_type''')
     results = _fetchall(cur)
     conn.close()
     
     tree = {}
     for r in results:
         subject = r['subject']
+        category = r['category'] or '未分类'
+        qtype = r['question_type'] or '其他'
+        
         if subject not in tree:
-            tree[subject] = []
-        tree[subject].append({'category': r['category'], 'count': r['cnt']})
+            tree[subject] = {}
+        if category not in tree[subject]:
+            tree[subject][category] = {}
+        tree[subject][category][qtype] = r['cnt']
+    
     return tree
 
 def get_gaokao_stats():
-    """获取高考真题统计"""
+    """获取高考真题统计 - 返回列表 [{subject, count, min_year, max_year}]"""
     conn = get_connection()
     
-    cur = _execute(conn, 'SELECT COUNT(*) as cnt FROM gaokao_questions')
-    total = _fetchone(cur)['cnt']
-    
-    cur = _execute(conn, 'SELECT subject, COUNT(*) as cnt FROM gaokao_questions GROUP BY subject ORDER BY cnt DESC')
-    by_subject = _fetchall(cur)
-    
-    cur = _execute(conn, 'SELECT year, COUNT(*) as cnt FROM gaokao_questions WHERE year IS NOT NULL GROUP BY year ORDER BY year DESC')
-    by_year = _fetchall(cur)
-    
+    cur = _execute(conn, '''SELECT subject, COUNT(*) as cnt, 
+                           MIN(year) as min_year, MAX(year) as max_year
+                           FROM gaokao_questions 
+                           GROUP BY subject 
+                           ORDER BY cnt DESC''')
+    results = _fetchall(cur)
     conn.close()
-    return {'total': total, 'by_subject': by_subject, 'by_year': by_year}
+    
+    return results
 
 def delete_study_plan(plan_id):
     """删除学习计划"""
