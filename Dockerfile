@@ -21,8 +21,7 @@ COPY . .
 # 创建数据目录
 RUN mkdir -p data uploads/exams logs
 
-# 暴露端口
-EXPOSE 5001
+# 启动脚本
+RUN chmod +x start.sh
 
-# 启动命令
-CMD ["gunicorn", "-b", "0.0.0.0:5001", "-w", "4", "--timeout", "120", "app:app"]
+CMD ["./start.sh"]
