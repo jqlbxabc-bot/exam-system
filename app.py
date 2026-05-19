@@ -25,6 +25,7 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB
 
 # 初始化
 db.init_db()
+db.init_default_admin()
 
 # ==================== 辅助函数 ====================
 def login_required(f):
