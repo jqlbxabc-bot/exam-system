@@ -1112,10 +1112,33 @@ def get_user_practice_sessions(user_id, subject=None, status=None, limit=50):
     """获取用户练习会话（兼容旧接口）"""
     return get_practice_sessions_by_user(user_id, subject, status, limit)
 
-def get_all_gaokao_questions(limit=100):
-    """获取所有高考真题"""
+def get_all_gaokao_questions(limit=100, subject=None, year=None, category=None, 
+                            question_type=None, difficulty=None):
+    """获取所有高考真题（支持筛选）"""
     conn = get_connection()
-    cur = _execute(conn, 'SELECT * FROM gaokao_questions ORDER BY created_at DESC LIMIT %s', (limit,))
+    query = 'SELECT * FROM gaokao_questions WHERE 1=1'
+    params = []
+    
+    if subject:
+        query += ' AND subject=%s'
+        params.append(subject)
+    if year:
+        query += ' AND year=%s'
+        params.append(year)
+    if category:
+        query += ' AND category=%s'
+        params.append(category)
+    if question_type:
+        query += ' AND question_type=%s'
+        params.append(question_type)
+    if difficulty:
+        query += ' AND difficulty=%s'
+        params.append(difficulty)
+    
+    query += ' ORDER BY created_at DESC LIMIT %s'
+    params.append(limit)
+    
+    cur = _execute(conn, query, params)
     results = _fetchall(cur)
     conn.close()
     return results
