@@ -42,6 +42,11 @@ def get_current_user():
     return session.get('user')
 
 # ==================== 路由 ====================
+@app.route('/health')
+def health():
+    """Railway健康检查端点"""
+    return 'OK', 200
+
 @app.route('/')
 def index():
     if 'user' not in session:
