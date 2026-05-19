@@ -156,25 +156,28 @@ def dashboard():
 @app.route('/exams')
 @login_required
 def exam_list():
-    keyword = request.args.get('keyword', '')
-    subject = request.args.get('subject', '')
-    grade = request.args.get('grade', '')
-    exam_type = request.args.get('exam_type', '')
-    page = request.args.get('page', 1, type=int)
-    
-    # 使用分页查询
-    result = db.search_exams(keyword=keyword, subject=subject, grade=grade, 
-                            exam_type=exam_type, page=page, per_page=20)
-    
-    subjects = ['语文', '数学', '英语', '物理', '化学', '生物', '历史', '地理', '政治']
-    grades = ['高一', '高二', '高三']
-    exam_types = ['月考', '期中', '期末', '模拟', '高考真题', '竞赛']
-    
-    return render_template('exam_list.html', 
-                          exams=result['items'],
-                          pagination=result,
-                          subjects=subjects, grades=grades, exam_types=exam_types,
-                          keyword=keyword, subject=subject, grade=grade, exam_type=exam_type)
+    try:
+        keyword = request.args.get('keyword', '')
+        subject = request.args.get('subject', '')
+        grade = request.args.get('grade', '')
+        exam_type = request.args.get('exam_type', '')
+        page = request.args.get('page', 1, type=int)
+        
+        # 使用分页查询
+        result = db.search_exams(keyword=keyword, subject=subject, grade=grade, 
+                                exam_type=exam_type, page=page, per_page=20)
+        
+        subjects = ['语文', '数学', '英语', '物理', '化学', '生物', '历史', '地理', '政治']
+        grades = ['高一', '高二', '高三']
+        exam_types = ['月考', '期中', '期末', '模拟', '高考真题', '竞赛']
+        
+        return render_template('exam_list.html', 
+                              exams=result['items'],
+                              pagination=result,
+                              subjects=subjects, grades=grades, exam_types=exam_types,
+                              keyword=keyword, subject=subject, grade=grade, exam_type=exam_type)
+    except Exception as e:
+        return f'<pre>ERROR: {str(e)}</pre>', 500
 
 @app.route('/exams/batch-import')
 @login_required
