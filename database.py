@@ -1011,3 +1011,211 @@ def get_config_safe(key, default=None):
         return get_config(key, default)
     except:
         return default
+
+# ==================== 补充缺失的函数 ====================
+
+def get_all_exams(limit=100):
+    """获取所有试卷"""
+    conn = get_connection()
+    cur = _execute(conn, 'SELECT * FROM exams ORDER BY created_at DESC LIMIT %s', (limit,))
+    results = _fetchall(cur)
+    conn.close()
+    return results
+
+def get_mistakes(user_id, subject=None, limit=100):
+    """获取错题列表（兼容旧接口）"""
+    return get_mistakes_by_user(user_id, subject=subject, limit=limit)
+
+def get_questions(exam_id):
+    """获取试卷题目（兼容旧接口）"""
+    return get_questions_by_exam(exam_id)
+
+def add_ai_analysis(exam_id, analysis_type='综合分析', content=None, model_name=None,
+                    difficulty=None, knowledge_summary=None, question_count=None):
+    """添加AI分析（兼容旧接口）"""
+    return add_analysis(exam_id, analysis_type, content, model_name, difficulty, knowledge_summary, question_count)
+
+def get_ai_analysis(analysis_id):
+    """获取单个AI分析"""
+    conn = get_connection()
+    cur = _execute(conn, 'SELECT * FROM ai_analysis WHERE id=%s', (analysis_id,))
+    row = _fetchone(cur)
+    conn.close()
+    return row
+
+def get_all_ai_analyses(exam_id=None, limit=100):
+    """获取所有AI分析"""
+    conn = get_connection()
+    if exam_id:
+        cur = _execute(conn, 'SELECT * FROM ai_analysis WHERE exam_id=%s ORDER BY created_at DESC LIMIT %s', (exam_id, limit))
+    else:
+        cur = _execute(conn, 'SELECT * FROM ai_analysis ORDER BY created_at DESC LIMIT %s', (limit,))
+    results = _fetchall(cur)
+    conn.close()
+    return results
+
+def get_latest_ai_analysis(exam_id, analysis_type=None):
+    """获取最新的AI分析"""
+    conn = get_connection()
+    if analysis_type:
+        cur = _execute(conn, 'SELECT * FROM ai_analysis WHERE exam_id=%s AND analysis_type=%s ORDER BY created_at DESC LIMIT 1', (exam_id, analysis_type))
+    else:
+        cur = _execute(conn, 'SELECT * FROM ai_analysis WHERE exam_id=%s ORDER BY created_at DESC LIMIT 1', (exam_id,))
+    row = _fetchone(cur)
+    conn.close()
+    return row
+
+def delete_ai_analysis(analysis_id):
+    """删除AI分析"""
+    conn = get_connection()
+    _execute(conn, 'DELETE FROM ai_analysis WHERE id=%s', (analysis_id,))
+    conn.commit()
+    conn.close()
+
+def add_correction_record(user_id, mistake_id=None, practice_question_id=None, session_id=None,
+                          original_mistake=None, user_correction=None, is_correct=0, teacher_comment=None):
+    """添加改错记录（兼容旧接口）"""
+    return add_correction(user_id, mistake_id, practice_question_id, session_id, 
+                         original_mistake, user_correction, is_correct, teacher_comment)
+
+def get_correction_records(user_id, limit=100):
+    """获取改错记录（兼容旧接口）"""
+    return get_corrections_by_user(user_id, limit)
+
+def get_mistake_by_id(mistake_id):
+    """获取单个错题"""
+    conn = get_connection()
+    cur = _execute(conn, 'SELECT * FROM mistake_book WHERE id=%s', (mistake_id,))
+    row = _fetchone(cur)
+    conn.close()
+    return row
+
+def create_practice_session(user_id, mistake_id=None, subject=None, practice_type='错题巩固', title=None):
+    """创建练习会话（兼容旧接口）"""
+    return add_practice_session(user_id, mistake_id, subject, practice_type, title)
+
+def complete_practice_session(session_id, **kwargs):
+    """完成练习会话（兼容旧接口）"""
+    kwargs['status'] = '已完成'
+    kwargs['completed_at'] = datetime.now().isoformat()
+    return update_practice_session(session_id, **kwargs)
+
+def update_practice_answer(question_id, user_answer=None, is_correct=0):
+    """更新练习答案"""
+    conn = get_connection()
+    _execute(conn, 'UPDATE practice_questions SET user_answer=%s, is_correct=%s WHERE id=%s',
+            (user_answer, is_correct, question_id))
+    conn.commit()
+    conn.close()
+
+def get_user_practice_sessions(user_id, subject=None, status=None, limit=50):
+    """获取用户练习会话（兼容旧接口）"""
+    return get_practice_sessions_by_user(user_id, subject, status, limit)
+
+def get_all_gaokao_questions(limit=100):
+    """获取所有高考真题"""
+    conn = get_connection()
+    cur = _execute(conn, 'SELECT * FROM gaokao_questions ORDER BY created_at DESC LIMIT %s', (limit,))
+    results = _fetchall(cur)
+    conn.close()
+    return results
+
+def get_gaokao_question_by_id(question_id):
+    """获取单个高考真题"""
+    conn = get_connection()
+    cur = _execute(conn, 'SELECT * FROM gaokao_questions WHERE id=%s', (question_id,))
+    row = _fetchone(cur)
+    conn.close()
+    return row
+
+def update_gaokao_question(question_id, **kwargs):
+    """更新高考真题"""
+    conn = get_connection()
+    fields = []
+    values = []
+    for key, value in kwargs.items():
+        fields.append(f'{key}=%s')
+        values.append(value)
+    values.append(question_id)
+    sql = f'UPDATE gaokao_questions SET {", ".join(fields)} WHERE id=%s'
+    _execute(conn, sql, values)
+    conn.commit()
+    conn.close()
+
+def delete_gaokao_question(question_id):
+    """删除高考真题"""
+    conn = get_connection()
+    _execute(conn, 'DELETE FROM gaokao_questions WHERE id=%s', (question_id,))
+    conn.commit()
+    conn.close()
+
+def get_gaokao_category_tree():
+    """获取高考真题分类树"""
+    conn = get_connection()
+    cur = _execute(conn, '''SELECT DISTINCT subject, category, COUNT(*) as cnt 
+                           FROM gaokao_questions 
+                           WHERE category != '' 
+                           GROUP BY subject, category 
+                           ORDER BY subject, category''')
+    results = _fetchall(cur)
+    conn.close()
+    
+    tree = {}
+    for r in results:
+        subject = r['subject']
+        if subject not in tree:
+            tree[subject] = []
+        tree[subject].append({'category': r['category'], 'count': r['cnt']})
+    return tree
+
+def get_gaokao_stats():
+    """获取高考真题统计"""
+    conn = get_connection()
+    
+    cur = _execute(conn, 'SELECT COUNT(*) as cnt FROM gaokao_questions')
+    total = _fetchone(cur)['cnt']
+    
+    cur = _execute(conn, 'SELECT subject, COUNT(*) as cnt FROM gaokao_questions GROUP BY subject ORDER BY cnt DESC')
+    by_subject = _fetchall(cur)
+    
+    cur = _execute(conn, 'SELECT year, COUNT(*) as cnt FROM gaokao_questions WHERE year IS NOT NULL GROUP BY year ORDER BY year DESC')
+    by_year = _fetchall(cur)
+    
+    conn.close()
+    return {'total': total, 'by_subject': by_subject, 'by_year': by_year}
+
+def delete_study_plan(plan_id):
+    """删除学习计划"""
+    conn = get_connection()
+    _execute(conn, 'DELETE FROM study_plans WHERE id=%s', (plan_id,))
+    conn.commit()
+    conn.close()
+
+def get_plan_stats(user_id):
+    """获取学习计划统计"""
+    conn = get_connection()
+    
+    cur = _execute(conn, 'SELECT COUNT(*) as cnt FROM study_plans WHERE user_id=%s', (user_id,))
+    total = _fetchone(cur)['cnt']
+    
+    cur = _execute(conn, 'SELECT COUNT(*) as cnt FROM study_plans WHERE user_id=%s AND status=%s', (user_id, '进行中'))
+    in_progress = _fetchone(cur)['cnt']
+    
+    cur = _execute(conn, 'SELECT COUNT(*) as cnt FROM study_plans WHERE user_id=%s AND status=%s', (user_id, '已完成'))
+    completed = _fetchone(cur)['cnt']
+    
+    conn.close()
+    return {'total': total, 'in_progress': in_progress, 'completed': completed}
+
+def get_subject_stats(user_id):
+    """获取科目统计"""
+    conn = get_connection()
+    
+    cur = _execute(conn, '''SELECT subject, COUNT(*) as cnt, 
+                           AVG(CASE WHEN mastery_level >= 3 THEN 1.0 ELSE 0.0 END) * 100 as mastery_rate
+                           FROM mistake_book 
+                           WHERE user_id=%s AND subject IS NOT NULL 
+                           GROUP BY subject ORDER BY cnt DESC''', (user_id,))
+    results = _fetchall(cur)
+    conn.close()
+    return results
