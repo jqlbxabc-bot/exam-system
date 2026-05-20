@@ -1,0 +1,8 @@
+[phases.setup]
+aptPkgs = [
+  "tesseract-ocr",
+  "tesseract-ocr-eng",
+  "tesseract-ocr-chi-sim",
+  "antiword",
+  "catdoc"
+]
