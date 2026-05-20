@@ -3,179 +3,65 @@
 {% block title %}上传试卷 - 试卷管理系统{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-    <h4>📤 上传试卷</h4>
-</div>
+<div class="mb-4"><h4>📤 上传试卷</h4></div>
 
 <div class="card">
     <div class="card-body">
         <form method="POST" enctype="multipart/form-data" id="uploadForm">
             <div class="row">
-                <!-- 基本信息 -->
                 <div class="col-md-8">
                     <div class="card mb-4">
-                        <div class="card-header">
-                            <i class="bi bi-info-circle"></i> 基本信息
-                        </div>
+                        <div class="card-header"><i class="bi bi-info-circle"></i> 基本信息</div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <label class="form-label">试卷名称</label>
-                                <input type="text" class="form-control" name="title"
-                                       placeholder="留空则自动识别，例如：2026年高三数学月考试卷">
+                                <input type="text" class="form-control" name="title" placeholder="留空则自动识别，例如：2026年高三数学月考试卷">
                                 <div class="form-text">留空将根据文件内容自动生成标题</div>
                             </div>
-                            
                             <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label">科目</label>
-                                    <select class="form-select" name="subject">
-                                        <option value="">自动识别</option>
-                                        {% for s in subjects %}
-                                        <option value="{{ s }}">{{ s }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">年级</label>
-                                    <select class="form-select" name="grade">
-                                        <option value="">选择年级</option>
-                                        {% for g in grades %}
-                                        <option value="{{ g }}">{{ g }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">考试类型</label>
-                                    <select class="form-select" name="exam_type">
-                                        {% for t in exam_types %}
-                                        <option value="{{ t }}">{{ t }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
+                                <div class="col-md-4"><label class="form-label">科目</label><select class="form-select" name="subject"><option value="">自动识别</option>{% for s in subjects %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select></div>
+                                <div class="col-md-4"><label class="form-label">年级</label><select class="form-select" name="grade"><option value="">选择年级</option>{% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></div>
+                                <div class="col-md-4"><label class="form-label">考试类型</label><select class="form-select" name="exam_type">{% for t in exam_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select></div>
                             </div>
-                            
                             <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">考试日期</label>
-                                    <input type="date" class="form-control" name="exam_date">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">总分</label>
-                                    <input type="number" class="form-control" name="total_score" 
-                                           value="150" min="0" step="1">
-                                </div>
+                                <div class="col-md-6"><label class="form-label">考试日期</label><input type="date" class="form-control" name="exam_date"></div>
+                                <div class="col-md-6"><label class="form-label">总分</label><input type="number" class="form-control" name="total_score" value="150" min="0" step="1"></div>
                             </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">试卷描述</label>
-                                <textarea class="form-control" name="description" rows="3" 
-                                          placeholder="输入试卷的简要描述..."></textarea>
-                            </div>
-                            
+                            <div class="mb-3"><label class="form-label">试卷描述</label><textarea class="form-control" name="description" rows="3" placeholder="输入试卷的简要描述..."></textarea></div>
                             <div class="mb-3">
                                 <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" name="auto_recognize" 
-                                           id="auto_recognize" checked>
-                                    <label class="form-check-label" for="auto_recognize">
-                                        <i class="bi bi-robot"></i> 启用AI自动识别
-                                    </label>
-                                    <div class="form-text">上传后自动识别试卷科目、年级、题型等信息</div>
+                                    <input class="form-check-input" type="checkbox" name="auto_recognize" id="auto_recognize" checked>
+                                    <label class="form-check-label" for="auto_recognize"><i class="bi bi-robot"></i> 启用AI自动识别与分类</label>
+                                    <div class="form-text">上传后会自动识别题目，并按题型、知识点和难度归类入库。</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- 文件上传 -->
                     <div class="card">
-                        <div class="card-header">
-                            <i class="bi bi-cloud-upload"></i> 上传文件
-                        </div>
+                        <div class="card-header"><i class="bi bi-cloud-upload"></i> 上传文件</div>
                         <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label">主文件（试卷图片或文档）</label>
-                                <input type="file" class="form-control" name="file" 
-                                       accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx">
-                                <div class="form-text">支持格式：JPG、PNG、PDF、Word文档，最大50MB</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">多页上传（可选）</label>
-                                <input type="file" class="form-control" name="files" multiple
-                                       accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf">
-                                <div class="form-text">如果试卷有多页，可以一次选择多个文件</div>
-                            </div>
-                            
-                            <!-- 文件预览 -->
-                            <div id="filePreview" class="row mt-3" style="display: none;">
-                                <div class="col-12">
-                                    <h6>已选择的文件：</h6>
-                                    <div id="fileList" class="list-group"></div>
+                            <div class="mb-3"><label class="form-label">主文件（试卷图片或文档）</label><input type="file" class="form-control" name="file" accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx"><div class="form-text">支持 JPG、PNG、PDF、Word 文档，最大50MB</div></div>
+                            <div class="mb-3"><label class="form-label">多页上传（可选）</label><input type="file" class="form-control" name="files" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf"><div class="form-text">如果试卷有多页，可以一次选择多个文件</div></div>
+                            <div id="filePreview" class="row mt-3" style="display: none;"><div class="col-12"><h6>已选择的文件：</h6><div id="fileList" class="list-group"></div></div></div>
+                            <div id="uploadProgress" class="mt-4" style="display:none;">
+                                <div class="d-flex justify-content-between mb-2"><strong id="uploadProgressText">正在上传文件</strong><span id="uploadProgressPercent">20%</span></div>
+                                <div class="progress" style="height: 10px;"><div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:20%"></div></div>
+                                <div class="row text-center mt-3 small text-muted">
+                                    <div class="col step-item" data-step="1"><i class="bi bi-cloud-arrow-up"></i><br>上传</div>
+                                    <div class="col step-item" data-step="2"><i class="bi bi-eye"></i><br>识别</div>
+                                    <div class="col step-item" data-step="3"><i class="bi bi-tags"></i><br>分类</div>
+                                    <div class="col step-item" data-step="4"><i class="bi bi-check-circle"></i><br>入库</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- 右侧提示 -->
                 <div class="col-md-4">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <i class="bi bi-lightbulb"></i> 上传提示
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <h6>📷 图片上传</h6>
-                                <ul class="small text-muted">
-                                    <li>支持手机拍照上传</li>
-                                    <li>建议清晰拍摄，便于AI识别</li>
-                                    <li>多页试卷请分别上传</li>
-                                </ul>
-                            </div>
-                            <div class="mb-3">
-                                <h6>📄 文档上传</h6>
-                                <ul class="small text-muted">
-                                    <li>支持PDF、Word格式</li>
-                                    <li>系统会自动提取内容</li>
-                                </ul>
-                            </div>
-                            <div>
-                                <h6>🤖 AI分析</h6>
-                                <ul class="small text-muted">
-                                    <li>上传后可进行AI分析</li>
-                                    <li>支持多种分析类型</li>
-                                    <li>分析结果自动保存</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <div class="card-header">
-                            <i class="bi bi-shield-check"></i> 存储说明
-                        </div>
-                        <div class="card-body">
-                            <p class="small text-muted mb-2">
-                                <i class="bi bi-check-circle text-success"></i> 
-                                文件将安全存储
-                            </p>
-                            <p class="small text-muted mb-2">
-                                <i class="bi bi-check-circle text-success"></i> 
-                                支持云端备份
-                            </p>
-                            <p class="small text-muted mb-0">
-                                <i class="bi bi-check-circle text-success"></i> 
-                                随时可以下载
-                            </p>
-                        </div>
-                    </div>
+                    <div class="card mb-4"><div class="card-header"><i class="bi bi-lightbulb"></i> 上传提示</div><div class="card-body"><ul class="small text-muted mb-0"><li>图片越清晰，识别效果越好</li><li>上传后会自动进入题型和知识点分类</li><li>上传成功后可在试卷详情进入识别确认页</li></ul></div></div>
+                    <div class="card"><div class="card-header"><i class="bi bi-shield-check"></i> 自动分类说明</div><div class="card-body"><p class="small text-muted mb-2"><i class="bi bi-check-circle text-success"></i> 自动识别选择题、填空题、解答题等题型</p><p class="small text-muted mb-2"><i class="bi bi-check-circle text-success"></i> 自动提取知识点并同步到高考真题库</p><p class="small text-muted mb-0"><i class="bi bi-check-circle text-success"></i> 可人工确认后再次修正分类</p></div></div>
                 </div>
             </div>
-            
-            <div class="text-center mt-4">
-                <button type="submit" class="btn btn-primary btn-lg px-5">
-                    <i class="bi bi-cloud-upload"></i> 上传试卷
-                </button>
-            </div>
+            <div class="text-center mt-4"><button type="submit" class="btn btn-primary btn-lg px-5"><i class="bi bi-cloud-upload"></i> 上传试卷</button></div>
         </form>
     </div>
 </div>
@@ -183,42 +69,43 @@
 
 {% block extra_js %}
 <script>
+function setUploadStep(percent, text, step) {
+    document.getElementById('uploadProgressText').textContent = text;
+    document.getElementById('uploadProgressPercent').textContent = percent + '%';
+    document.getElementById('uploadProgressBar').style.width = percent + '%';
+    document.querySelectorAll('.step-item').forEach(item => {
+        item.classList.toggle('text-primary', Number(item.dataset.step) <= step);
+        item.classList.toggle('fw-bold', Number(item.dataset.step) === step);
+    });
+}
+
 document.getElementById('uploadForm').addEventListener('submit', function(e) {
     const fileInput = document.querySelector('input[name="file"]');
-    
     if (!fileInput.files || fileInput.files.length === 0) {
         e.preventDefault();
         alert('请至少上传一个试卷文件');
         return false;
     }
-    
-    // 显示上传中提示
+    document.getElementById('uploadProgress').style.display = 'block';
     const btn = this.querySelector('button[type="submit"]');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 上传中...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 上传与识别中...';
+    const steps = [[20, '正在上传文件', 1], [45, '正在识别题目内容', 2], [70, '正在按题型和知识点分类', 3], [90, '正在保存到题库', 4]];
+    steps.forEach((s, i) => setTimeout(() => setUploadStep(s[0], s[1], s[2]), i * 900));
 });
 
-// 文件预览
 document.querySelector('input[name="files"]').addEventListener('change', function(e) {
     const files = e.target.files;
     const preview = document.getElementById('filePreview');
     const fileList = document.getElementById('fileList');
-    
     if (files.length > 0) {
         preview.style.display = 'block';
         fileList.innerHTML = '';
-        
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const item = document.createElement('div');
             item.className = 'list-group-item d-flex justify-content-between align-items-center';
-            item.innerHTML = `
-                <span>
-                    <i class="bi bi-file-earmark"></i> ${file.name}
-                    <small class="text-muted ms-2">(${(file.size / 1024 / 1024).toFixed(2)} MB)</small>
-                </span>
-                <span class="badge bg-primary">第${i + 1}页</span>
-            `;
+            item.innerHTML = `<span><i class="bi bi-file-earmark"></i> ${file.name}<small class="text-muted ms-2">(${(file.size / 1024 / 1024).toFixed(2)} MB)</small></span><span class="badge bg-primary">第${i + 1}页</span>`;
             fileList.appendChild(item);
         }
     } else {
