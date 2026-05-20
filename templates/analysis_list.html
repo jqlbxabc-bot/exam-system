@@ -8,7 +8,6 @@
     <span class="badge bg-primary">共 {{ analyses|length }} 条记录</span>
 </div>
 
-<!-- 筛选条件 -->
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
@@ -37,7 +36,6 @@
     </div>
 </div>
 
-<!-- 分析记录列表 -->
 {% if analyses %}
 <div class="card">
     <div class="card-body p-0">
@@ -56,6 +54,8 @@
                 </thead>
                 <tbody>
                     {% for analysis in analyses %}
+                    {% set content = analysis.content or '' %}
+                    {% set analysis_type = analysis.analysis_type or '分析记录' %}
                     <tr>
                         <td>{{ analysis.id }}</td>
                         <td>
@@ -66,34 +66,33 @@
                             <small class="text-muted">{{ analysis.exam_subject or '' }}</small>
                         </td>
                         <td>
-                            {% if analysis.analysis_type == '错题提取与分析' %}
-                                <span class="badge bg-danger">{{ analysis.analysis_type }}</span>
-                            {% elif analysis.analysis_type == '综合分析' %}
-                                <span class="badge bg-primary">{{ analysis.analysis_type }}</span>
-                            {% elif analysis.analysis_type == '知识点总结' %}
-                                <span class="badge bg-success">{{ analysis.analysis_type }}</span>
-                            {% elif analysis.analysis_type == '学习建议' %}
-                                <span class="badge bg-warning">{{ analysis.analysis_type }}</span>
+                            {% if analysis_type == '错题提取与分析' %}
+                                <span class="badge bg-danger">{{ analysis_type }}</span>
+                            {% elif analysis_type == '综合分析' %}
+                                <span class="badge bg-primary">{{ analysis_type }}</span>
+                            {% elif analysis_type == '知识点总结' %}
+                                <span class="badge bg-success">{{ analysis_type }}</span>
+                            {% elif analysis_type == '学习建议' %}
+                                <span class="badge bg-warning">{{ analysis_type }}</span>
                             {% else %}
-                                <span class="badge bg-info">{{ analysis.analysis_type }}</span>
+                                <span class="badge bg-info">{{ analysis_type }}</span>
                             {% endif %}
                         </td>
-                        <td>
-                            <small>{{ analysis.model_name or 'AI' }}</small>
-                        </td>
-                        <td>
-                            <small>{{ analysis.created_at }}</small>
-                        </td>
+                        <td><small>{{ analysis.model_name or 'AI' }}</small></td>
+                        <td><small>{{ analysis.created_at or '-' }}</small></td>
                         <td>
                             <div class="text-truncate" style="max-width: 300px;">
-                                {{ analysis.content[:100] }}{% if analysis.content|length > 100 %}...{% endif %}
+                                {{ content[:100] }}{% if content|length > 100 %}...{% endif %}
                             </div>
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="viewAnalysis({{ analysis.id }}, '{{ analysis.analysis_type }}', `{{ analysis.content|e }}`)">
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    data-analysis-type="{{ analysis_type|e }}"
+                                    data-analysis-content="{{ content|e }}"
+                                    onclick="viewAnalysisFromButton(this)">
                                 <i class="bi bi-eye"></i> 查看
                             </button>
-                            <form method="POST" action="{{ url_for('delete_analysis', analysis_id=analysis.id) }}" 
+                            <form method="POST" action="{{ url_for('delete_analysis', analysis_id=analysis.id) }}"
                                   class="d-inline" onsubmit="return confirm('确定要删除这条分析记录吗？')">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-trash"></i>
@@ -119,7 +118,6 @@
 </div>
 {% endif %}
 
-<!-- 查看分析详情模态框 -->
 <div class="modal fade" id="viewAnalysisModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -138,7 +136,9 @@
 </div>
 
 <script>
-function viewAnalysis(id, type, content) {
+function viewAnalysisFromButton(button) {
+    const type = button.dataset.analysisType || '分析记录';
+    const content = button.dataset.analysisContent || '暂无内容';
     document.getElementById('analysisModalTitle').textContent = type + ' - 分析详情';
     document.getElementById('analysisModalContent').innerHTML = marked.parse(content);
     var modal = new bootstrap.Modal(document.getElementById('viewAnalysisModal'));
