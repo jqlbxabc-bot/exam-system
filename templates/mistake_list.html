@@ -5,12 +5,48 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0">📝 错题本</h4>
-    <div>
-        <span class="badge bg-warning">{{ mistakes | length }} 道错题</span>
+    <span class="badge bg-warning">{{ mistakes | length }} 道错题</span>
+</div>
+
+{% if mistake_stats %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body"><h6><i class="bi bi-bookmark"></i> 薄弱知识点</h6>{% for item in mistake_stats.knowledge_points %}<div class="d-flex justify-content-between border-bottom py-1"><span>{{ item.name }}</span><strong>{{ item.count }}</strong></div>{% endfor %}</div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body"><h6><i class="bi bi-pie-chart"></i> 科目分布</h6>{% for item in mistake_stats.subjects %}<div class="d-flex justify-content-between border-bottom py-1"><span>{{ item.name }}</span><strong>{{ item.count }}</strong></div>{% endfor %}</div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body"><h6><i class="bi bi-ui-checks"></i> 题型分布</h6>{% for item in mistake_stats.question_types %}<div class="d-flex justify-content-between border-bottom py-1"><span>{{ item.name }}</span><strong>{{ item.count }}</strong></div>{% endfor %}</div></div>
     </div>
 </div>
 
-<!-- 筛选 -->
+<div class="card mb-4 border-primary">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('auto_generate_practice') }}" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">按知识点生成练习</label>
+                <select class="form-select" name="knowledge_point">
+                    {% for item in mistake_stats.knowledge_points %}<option value="{{ item.name }}">{{ item.name }}（{{ item.count }}题）</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">科目</label>
+                <select class="form-select" name="subject">
+                    <option value="">自动</option>
+                    {% for s in subjects %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">题量</label>
+                <input type="number" class="form-control" name="count" value="8" min="3" max="20">
+            </div>
+            <div class="col-md-3"><button class="btn btn-primary w-100"><i class="bi bi-lightning-charge"></i> 生成专项练习</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3 align-items-end">
@@ -18,26 +54,15 @@
                 <label class="form-label">科目筛选</label>
                 <select class="form-select" name="subject">
                     <option value="">全部科目</option>
-                    {% for s in subjects %}
-                    <option value="{{ s }}" {% if selected_subject == s %}selected{% endif %}>{{ s }}</option>
-                    {% endfor %}
+                    {% for s in subjects %}<option value="{{ s }}" {% if selected_subject == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-filter"></i> 筛选
-                </button>
-            </div>
-            <div class="col-md-2">
-                <a href="{{ url_for('mistake_list') }}" class="btn btn-outline-secondary w-100">
-                    <i class="bi bi-arrow-counterclockwise"></i> 重置
-                </a>
-            </div>
+            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter"></i> 筛选</button></div>
+            <div class="col-md-2"><a href="{{ url_for('mistake_list') }}" class="btn btn-outline-secondary w-100"><i class="bi bi-arrow-counterclockwise"></i> 重置</a></div>
         </form>
     </div>
 </div>
 
-<!-- 错题列表 -->
 {% if mistakes %}
     {% for mistake in mistakes %}
     <div class="card mb-3">
@@ -45,96 +70,34 @@
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <div>
                     <span class="badge bg-primary me-2">{{ mistake.subject }}</span>
-                    <span class="badge bg-secondary">{{ mistake.question_type }}</span>
+                    <span class="badge bg-secondary me-2">{{ mistake.question_type }}</span>
+                    <span class="badge bg-light text-dark border">{{ mistake.knowledge_point }}</span>
                 </div>
-                <div class="text-muted small">
-                    {{ mistake.created_at[:10] }}
-                </div>
+                <div class="text-muted small">{{ mistake.created_date }}</div>
             </div>
-            
-            <div class="mb-3">
-                <h6>题目：</h6>
-                <p class="mb-0">{{ mistake.content }}</p>
-            </div>
-            
+            <div class="mb-3"><h6>题目：</h6><p class="mb-0">{{ mistake.content }}</p></div>
             <div class="row">
-                {% if mistake.correct_answer %}
-                <div class="col-md-6">
-                    <div class="p-3 bg-success bg-opacity-10 rounded">
-                        <h6 class="text-success"><i class="bi bi-check-circle"></i> 正确答案</h6>
-                        <p class="mb-0">{{ mistake.correct_answer }}</p>
-                    </div>
-                </div>
-                {% endif %}
-                
-                {% if mistake.user_answer %}
-                <div class="col-md-6">
-                    <div class="p-3 bg-danger bg-opacity-10 rounded">
-                        <h6 class="text-danger"><i class="bi bi-x-circle"></i> 我的答案</h6>
-                        <p class="mb-0">{{ mistake.user_answer }}</p>
-                    </div>
-                </div>
-                {% endif %}
+                {% if mistake.correct_answer %}<div class="col-md-6"><div class="p-3 bg-success bg-opacity-10 rounded"><h6 class="text-success"><i class="bi bi-check-circle"></i> 正确答案</h6><p class="mb-0">{{ mistake.correct_answer }}</p></div></div>{% endif %}
+                {% if mistake.user_answer %}<div class="col-md-6"><div class="p-3 bg-danger bg-opacity-10 rounded"><h6 class="text-danger"><i class="bi bi-x-circle"></i> 我的答案</h6><p class="mb-0">{{ mistake.user_answer }}</p></div></div>{% endif %}
             </div>
-            
-            {% if mistake.analysis %}
-            <div class="mt-3 p-3 bg-info bg-opacity-10 rounded">
-                <h6 class="text-info"><i class="bi bi-lightbulb"></i> 解析</h6>
-                <p class="mb-0">{{ mistake.analysis }}</p>
-            </div>
-            {% endif %}
-            
-            <!-- 掌握程度 -->
-            <div class="mt-3 d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="me-2">掌握程度：</span>
-                    {% for i in range(6) %}
-                    <button class="btn btn-sm {% if mistake.mastery_level == i %}btn-warning{% else %}btn-outline-warning{% endif %} mastery-btn"
-                            onclick="updateMastery({{ mistake.id }}, {{ i }})"
-                            title="级别{{ i }}">
-                        {% if i == 0 %}❌{% elif i == 1 %}😰{% elif i == 2 %}🤔{% elif i == 3 %}😐{% elif i == 4 %}😊{% else %}✅{% endif %}
-                    </button>
-                    {% endfor %}
-                </div>
-                <div class="d-flex align-items-center">
-                    <small class="text-muted me-3">复习次数: {{ mistake.review_count }}</small>
-                    <form method="POST" action="{{ url_for('start_practice', mistake_id=mistake.id) }}">
-                        <button type="submit" class="btn btn-sm btn-warning">
-                            <i class="bi bi-pencil-square"></i> 开始练习
-                        </button>
-                    </form>
-                </div>
+            {% if mistake.analysis %}<div class="mt-3 p-3 bg-info bg-opacity-10 rounded"><h6 class="text-info"><i class="bi bi-lightbulb"></i> 解析</h6><p class="mb-0">{{ mistake.analysis }}</p></div>{% endif %}
+            <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div><span class="me-2">掌握程度：</span>{% for i in range(6) %}<button class="btn btn-sm {% if mistake.mastery_level == i %}btn-warning{% else %}btn-outline-warning{% endif %} mastery-btn" onclick="updateMastery({{ mistake.id }}, {{ i }})" title="级别{{ i }}">{{ i }}</button>{% endfor %}</div>
+                <div class="d-flex align-items-center"><small class="text-muted me-3">复习次数: {{ mistake.review_count }}</small><form method="POST" action="{{ url_for('start_practice', mistake_id=mistake.id) }}"><button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-pencil-square"></i> 开始练习</button></form></div>
             </div>
         </div>
     </div>
     {% endfor %}
 {% else %}
-    <div class="card">
-        <div class="card-body text-center py-5">
-            <i class="bi bi-journal-check text-success" style="font-size: 3rem;"></i>
-            <h5 class="mt-3">暂无错题</h5>
-            <p class="text-muted">在试卷详情页可以添加错题</p>
-        </div>
-    </div>
+    <div class="card"><div class="card-body text-center py-5"><i class="bi bi-journal-check text-success" style="font-size: 3rem;"></i><h5 class="mt-3">暂无错题</h5><p class="text-muted">在试卷详情页可以添加错题</p></div></div>
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 function updateMastery(mistakeId, level) {
-    fetch(`/mistakes/${mistakeId}/update`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `mastery_level=${level}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        }
-    });
+    fetch(`/mistakes/${mistakeId}/update`, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: `mastery_level=${level}`})
+    .then(response => response.json()).then(data => { if (data.success) location.reload(); });
 }
 </script>
 {% endblock %}
