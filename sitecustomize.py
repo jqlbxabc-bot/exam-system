@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Runtime hooks for uploaded Gaokao question auto-classification.
+"""Runtime compatibility and uploaded question auto-classification hooks.
 
-Python imports sitecustomize automatically during startup when this file is on
-sys.path. The hook keeps the existing upload flow unchanged: when recognized
-questions are saved through database.add_question, a classified copy is also
-added to the Gaokao question bank.
+Python imports this file automatically during startup. The hooks keep the
+existing app code stable while adding upload-time Gaokao classification and
+small compatibility fixes for SQLite and legacy analysis helpers.
 """
 
 import builtins
 import re
+import sqlite3
 
 
+_original_sqlite_connect = sqlite3.connect
 _original_import = builtins.__import__
 
 
@@ -86,6 +87,34 @@ SUBJECT_KEYWORD_RULES = {
 }
 
 
+def _normalize_sql(sql):
+    if isinstance(sql, str):
+        return sql.replace('id SERIAL PRIMARY KEY', 'id INTEGER PRIMARY KEY AUTOINCREMENT')
+    return sql
+
+
+class _CompatCursor(sqlite3.Cursor):
+    def execute(self, sql, parameters=()):
+        return super().execute(_normalize_sql(sql), parameters)
+
+
+class _CompatConnection(sqlite3.Connection):
+    def execute(self, sql, parameters=()):
+        return super().execute(_normalize_sql(sql), parameters)
+
+    def cursor(self, *args, **kwargs):
+        kwargs.setdefault('factory', _CompatCursor)
+        return super().cursor(*args, **kwargs)
+
+
+def _connect_with_sqlite_compat(*args, **kwargs):
+    kwargs.setdefault('factory', _CompatConnection)
+    return _original_sqlite_connect(*args, **kwargs)
+
+
+sqlite3.connect = _connect_with_sqlite_compat
+
+
 def _normalize_text(value):
     return str(value or '').strip()
 
@@ -141,6 +170,41 @@ def _infer_category_and_points(subject, content):
     return '未分类', '待人工确认'
 
 
+def _patch_analysis_helpers(module):
+    original_get_ai_analysis = getattr(module, 'get_ai_analysis', None)
+    original_get_all_ai_analyses = getattr(module, 'get_all_ai_analyses', None)
+
+    def get_ai_analysis(identifier):
+        if original_get_all_ai_analyses:
+            analyses = original_get_all_ai_analyses(identifier)
+            if analyses:
+                return analyses
+        if original_get_ai_analysis:
+            result = original_get_ai_analysis(identifier)
+            return [] if result is None else result
+        return []
+
+    def get_all_ai_analyses(exam_id=None, limit=100, analysis_type=None):
+        conn = module.get_connection()
+        params = []
+        query = 'SELECT * FROM ai_analysis WHERE 1=1'
+        if exam_id:
+            query += ' AND exam_id=%s'
+            params.append(exam_id)
+        if analysis_type:
+            query += ' AND analysis_type=%s'
+            params.append(analysis_type)
+        query += ' ORDER BY created_at DESC LIMIT %s'
+        params.append(limit)
+        cur = module._execute(conn, query, params)
+        results = module._fetchall(cur)
+        conn.close()
+        return results
+
+    module.get_ai_analysis = get_ai_analysis
+    module.get_all_ai_analyses = get_all_ai_analyses
+
+
 def _patch_search_gaokao_questions(module):
     original_search = getattr(module, 'search_gaokao_questions', None)
     if not original_search or getattr(original_search, '_accepts_upload_filters', False):
@@ -154,14 +218,13 @@ def _patch_search_gaokao_questions(module):
         count_query = 'SELECT COUNT(*) as cnt FROM gaokao_questions WHERE 1=1'
         params = []
 
-        filters = [
+        for clause, value in [
             ('subject=%s', subject),
             ('category=%s', category),
             ('year=%s', year),
             ('difficulty=%s', difficulty),
             ('question_type=%s', question_type),
-        ]
-        for clause, value in filters:
+        ]:
             if value:
                 query += f' AND {clause}'
                 count_query += f' AND {clause}'
@@ -209,13 +272,9 @@ def _patch_search_gaokao_questions(module):
     module.search_gaokao_questions = search_gaokao_questions
 
 
-def _patch_database_module(module):
-    if getattr(module, '_gaokao_upload_auto_classification_patched', False):
-        _patch_search_gaokao_questions(module)
-        return
-
+def _patch_add_question(module):
     original_add_question = getattr(module, 'add_question', None)
-    if not original_add_question:
+    if not original_add_question or getattr(original_add_question, '_auto_classifies_uploads', False):
         return
 
     def add_question(exam_id, question_number, question_type='选择题', content=None,
@@ -264,16 +323,24 @@ def _patch_database_module(module):
 
         return qid
 
+    add_question._auto_classifies_uploads = True
     module.add_question = add_question
+
+
+def _patch_database_module(module):
+    if getattr(module, '_runtime_compat_patched', False):
+        return
+    _patch_analysis_helpers(module)
     _patch_search_gaokao_questions(module)
-    module._gaokao_upload_auto_classification_patched = True
+    _patch_add_question(module)
+    module._runtime_compat_patched = True
 
 
-def _import_with_gaokao_classification_patch(name, globals=None, locals=None, fromlist=(), level=0):
+def _import_with_runtime_patch(name, globals=None, locals=None, fromlist=(), level=0):
     module = _original_import(name, globals, locals, fromlist, level)
     if name == 'database':
         _patch_database_module(module)
     return module
 
 
-builtins.__import__ = _import_with_gaokao_classification_patch
+builtins.__import__ = _import_with_runtime_patch
