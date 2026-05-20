@@ -7,14 +7,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        /* ========== CSS变量 ========== */
         :root {
             --primary: #4f46e5;
             --primary-dark: #4338ca;
-            --primary-light: #818cf8;
             --bg-body: #f5f7fa;
-            --bg-card: white;
-            --bg-sidebar: white;
+            --bg-card: #ffffff;
+            --bg-sidebar: #ffffff;
             --bg-navbar: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
             --text-primary: #1e293b;
             --text-secondary: #64748b;
@@ -24,11 +22,11 @@
             --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
             --shadow-lg: 0 8px 25px rgba(0,0,0,0.15);
             --sidebar-width: 240px;
-            --sidebar-collapsed: 70px;
+            --sidebar-collapsed: 76px;
+            --navbar-height: 56px;
             --transition-speed: 0.3s;
         }
 
-        /* 深色模式变量 */
         [data-theme="dark"] {
             --bg-body: #0f172a;
             --bg-card: #1e293b;
@@ -42,28 +40,21 @@
             --shadow-lg: 0 8px 25px rgba(0,0,0,0.5);
         }
 
-        /* ========== 基础样式 ========== */
         * {
-            transition: background-color var(--transition-speed), 
-                        color var(--transition-speed), 
-                        border-color var(--transition-speed),
-                        box-shadow var(--transition-speed);
+            transition: background-color var(--transition-speed), color var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
         }
 
         body {
+            margin: 0;
             font-family: "Microsoft YaHei", sans-serif;
             background-color: var(--bg-body);
             color: var(--text-primary);
             overflow-x: hidden;
         }
 
-        /* ========== 加载动画 ========== */
         .page-loader {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            inset: 0;
             background: var(--bg-body);
             display: flex;
             justify-content: center;
@@ -81,7 +72,7 @@
             width: 50px;
             height: 50px;
             border: 4px solid var(--border-color);
-            border-top: 4px solid var(--primary);
+            border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -90,13 +81,13 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ========== 导航栏 ========== */
         .navbar {
+            min-height: var(--navbar-height);
             background: var(--bg-navbar);
             box-shadow: var(--shadow-md);
             position: sticky;
             top: 0;
-            z-index: 1000;
+            z-index: 1100;
         }
 
         .navbar-brand {
@@ -104,27 +95,42 @@
             letter-spacing: 0.5px;
         }
 
-        /* ========== 侧边栏 ========== */
+        .app-shell {
+            display: flex;
+            align-items: stretch;
+            min-height: calc(100vh - var(--navbar-height));
+            width: 100%;
+        }
+
         .sidebar {
-            min-height: calc(100vh - 56px);
+            flex: 0 0 var(--sidebar-width);
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            max-width: var(--sidebar-width);
+            min-height: calc(100vh - var(--navbar-height));
+            height: calc(100vh - var(--navbar-height));
+            position: sticky;
+            top: var(--navbar-height);
             background: var(--bg-sidebar);
             box-shadow: var(--shadow-sm);
-            width: var(--sidebar-width);
-            transition: width var(--transition-speed) ease;
-            position: sticky;
-            top: 56px;
-            height: calc(100vh - 56px);
             overflow-y: auto;
             overflow-x: hidden;
+            z-index: 1000;
+            transition: flex-basis var(--transition-speed), width var(--transition-speed), min-width var(--transition-speed), max-width var(--transition-speed), transform var(--transition-speed);
         }
 
         .sidebar.collapsed {
+            flex-basis: var(--sidebar-collapsed);
             width: var(--sidebar-collapsed);
+            min-width: var(--sidebar-collapsed);
+            max-width: var(--sidebar-collapsed);
         }
 
         .sidebar .nav-link {
+            display: flex;
+            align-items: center;
             color: var(--text-secondary);
-            padding: 12px 20px;
+            padding: 12px 18px;
             border-radius: 8px;
             margin: 4px 10px;
             white-space: nowrap;
@@ -144,11 +150,21 @@
 
         .sidebar .nav-link i {
             width: 24px;
+            min-width: 24px;
             margin-right: 10px;
             font-size: 1.1rem;
+            text-align: center;
         }
 
-        .sidebar.collapsed .nav-link span {
+        .sidebar.collapsed .nav-link {
+            justify-content: center;
+            padding: 12px;
+            margin-left: 8px;
+            margin-right: 8px;
+        }
+
+        .sidebar.collapsed .nav-link span,
+        .sidebar.collapsed hr {
             display: none;
         }
 
@@ -156,18 +172,12 @@
             margin-right: 0;
         }
 
-        .sidebar.collapsed .nav-link {
-            text-align: center;
-            padding: 12px;
-        }
-
-        /* 侧边栏切换按钮 */
         .sidebar-toggle {
             position: fixed;
-            left: 225px;
-            top: 70px;
-            width: 30px;
-            height: 30px;
+            left: calc(var(--sidebar-width) - 20px);
+            top: calc(var(--navbar-height) + 18px);
+            width: 40px;
+            height: 40px;
             background: var(--primary);
             color: white;
             border: none;
@@ -176,28 +186,29 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            z-index: 1001;
+            z-index: 1200;
+            box-shadow: var(--shadow-md);
             transition: left var(--transition-speed), transform var(--transition-speed);
-            box-shadow: var(--shadow-sm);
         }
 
         .sidebar-toggle:hover {
-            transform: scale(1.1);
+            transform: scale(1.06);
         }
 
         .sidebar-toggle.collapsed {
-            left: 55px;
-        }
-
-        .sidebar-toggle i {
-            transition: transform var(--transition-speed);
+            left: calc(var(--sidebar-collapsed) - 20px);
         }
 
         .sidebar-toggle.collapsed i {
             transform: rotate(180deg);
         }
 
-        /* ========== 卡片 ========== */
+        .main-content {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 24px;
+        }
+
         .card {
             border: none;
             border-radius: 12px;
@@ -212,7 +223,6 @@
             font-weight: 600;
         }
 
-        /* ========== 统计卡片 ========== */
         .stat-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -228,24 +238,15 @@
             box-shadow: var(--shadow-lg);
         }
 
-        .stat-card.green {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        }
-
-        .stat-card.orange {
-            background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%);
-        }
-
-        .stat-card.red {
-            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-        }
+        .stat-card.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .stat-card.orange { background: linear-gradient(135deg, #F2994A 0%, #F2C94C 100%); }
+        .stat-card.red { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
 
         .stat-number {
             font-size: 2rem;
             font-weight: 700;
         }
 
-        /* ========== 按钮 ========== */
         .btn-primary {
             background-color: var(--primary);
             border-color: var(--primary);
@@ -258,21 +259,14 @@
             box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
         }
 
-        /* ========== 表格 ========== */
-        .table {
-            color: var(--text-primary);
-        }
-
-        .table-hover tbody tr:hover {
-            background-color: rgba(79, 70, 229, 0.05);
-        }
+        .table { color: var(--text-primary); }
+        .table-hover tbody tr:hover { background-color: rgba(79, 70, 229, 0.05); }
 
         [data-theme="dark"] .table {
             --bs-table-bg: var(--bg-card);
             --bs-table-hover-bg: rgba(79, 70, 229, 0.1);
         }
 
-        /* ========== 表单 ========== */
         .form-control, .form-select {
             background-color: var(--bg-card);
             border-color: var(--border-color);
@@ -286,15 +280,8 @@
             color: var(--text-primary);
         }
 
-        /* ========== 试卷卡片 ========== */
-        .exam-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .exam-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-        }
+        .exam-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .exam-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 
         .subject-badge {
             padding: 4px 12px;
@@ -303,41 +290,21 @@
             font-weight: 500;
         }
 
-        /* ========== 分析内容 ========== */
         .analysis-content {
             background: var(--bg-body);
             border-radius: 8px;
             padding: 20px;
             white-space: pre-wrap;
-            font-family: "Microsoft YaHei", sans-serif;
             line-height: 1.8;
         }
 
-        /* ========== 聊天界面 ========== */
-        .chat-container {
-            height: 400px;
-            overflow-y: auto;
-        }
-
-        .chat-message {
-            margin-bottom: 15px;
-            display: flex;
-            animation: fadeInUp 0.3s ease;
-        }
+        .chat-container { height: 400px; overflow-y: auto; }
+        .chat-message { margin-bottom: 15px; display: flex; animation: fadeInUp 0.3s ease; }
+        .chat-message.user { justify-content: flex-end; }
 
         @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .chat-message.user {
-            justify-content: flex-end;
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .chat-bubble {
@@ -359,7 +326,6 @@
             border-bottom-left-radius: 4px;
         }
 
-        /* ========== 掌握度颜色 ========== */
         .mastery-0 { color: #ef4444; }
         .mastery-1 { color: #f97316; }
         .mastery-2 { color: #eab308; }
@@ -367,7 +333,6 @@
         .mastery-4 { color: #10b981; }
         .mastery-5 { color: #059669; }
 
-        /* ========== 深色模式切换 ========== */
         .theme-toggle {
             background: rgba(255,255,255,0.2);
             border: none;
@@ -379,7 +344,6 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.3s, transform 0.3s;
         }
 
         .theme-toggle:hover {
@@ -387,30 +351,11 @@
             transform: scale(1.1);
         }
 
-        .theme-toggle i {
-            font-size: 1.2rem;
-        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-body); }
+        ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
-        /* ========== 滚动条 ========== */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-body);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--text-muted);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* ========== 提醒徽章 ========== */
         .notification-badge {
             position: absolute;
             top: -5px;
@@ -433,37 +378,29 @@
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
-        /* ========== 主内容区 ========== */
-        .main-content {
-            transition: margin-left var(--transition-speed);
-        }
-
-        .sidebar.collapsed ~ .main-content {
-            margin-left: var(--sidebar-collapsed);
-        }
-
-        /* ========== 响应式 ========== */
         @media (max-width: 768px) {
+            .app-shell { display: block; }
             .sidebar {
                 position: fixed;
-                left: -240px;
-                z-index: 1000;
-            }
-            
-            .sidebar.mobile-show {
                 left: 0;
+                top: var(--navbar-height);
+                height: calc(100vh - var(--navbar-height));
+                transform: translateX(-100%);
+                max-width: var(--sidebar-width);
             }
-            
+            .sidebar.mobile-show { transform: translateX(0); }
             .sidebar-toggle {
-                left: 10px;
-                top: 70px;
+                left: 12px;
+                top: calc(var(--navbar-height) + 12px);
             }
+            .sidebar-toggle.collapsed { left: 12px; }
+            .main-content { padding: 16px; }
+            .navbar .text-white { display: none; }
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- 页面加载动画 -->
     <div class="page-loader" id="pageLoader">
         <div class="loader-spinner"></div>
     </div>
@@ -474,14 +411,12 @@
                 <i class="bi bi-book"></i> 试卷管理系统
             </a>
             <div class="d-flex align-items-center gap-2">
-                <!-- 深色模式切换 -->
                 <button class="theme-toggle" onclick="toggleTheme()" title="切换深色模式">
                     <i class="bi bi-moon-stars" id="themeIcon"></i>
                 </button>
-                
                 <span class="text-white me-3">
-                    <i class="bi bi-person-circle"></i> 
-                    {{ session.user.display_name }} 
+                    <i class="bi bi-person-circle"></i>
+                    {{ session.user.display_name }}
                     <small class="opacity-75">({{ session.user.role }})</small>
                 </span>
                 <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
@@ -491,144 +426,121 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- 侧边栏 -->
-            <div class="col-lg-2 col-md-3 sidebar p-0" id="sidebar">
-                <nav class="nav flex-column py-3">
-                    <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" 
-                       href="{{ url_for('dashboard') }}">
-                        <i class="bi bi-speedometer2"></i> <span>首页</span>
-                    </a>
-                    <a class="nav-link {% if 'exam' in request.endpoint %}active{% endif %}" 
-                       href="{{ url_for('exam_list') }}">
-                        <i class="bi bi-file-earmark-text"></i> <span>试卷管理</span>
-                    </a>
-                    <a class="nav-link {% if request.endpoint == 'upload_exam' %}active{% endif %}" 
-                       href="{{ url_for('upload_exam') }}">
-                        <i class="bi bi-cloud-upload"></i> <span>上传试卷</span>
-                    </a>
-                    <a class="nav-link {% if 'mistake' in request.endpoint %}active{% endif %}" 
-                       href="{{ url_for('mistake_list') }}">
-                        <i class="bi bi-journal-x"></i> <span>错题本</span>
-                    </a>
-                    <a class="nav-link {% if request.endpoint == 'review_reminder' %}active{% endif %}" 
-                       href="{{ url_for('review_reminder') }}">
-                        <i class="bi bi-bell"></i> <span>复习提醒</span>
-                    </a>
-                    <a class="nav-link {% if 'analysis' in request.endpoint %}active{% endif %}" 
-                       href="{{ url_for('analysis_list') }}">
-                        <i class="bi bi-robot"></i> <span>分析管理</span>
-                    </a>
-                    <a class="nav-link {% if 'practice' in request.endpoint or 'correction' in request.endpoint %}active{% endif %}" 
-                       href="{{ url_for('practice_list') }}">
-                        <i class="bi bi-pencil-square"></i> <span>专项练习</span>
-                    </a>
-                    <a class="nav-link {% if 'gaokao' in request.endpoint %}active{% endif %}" 
-                       href="{{ url_for('gaokao_list') }}">
-                        <i class="bi bi-mortarboard"></i> <span>高考真题</span>
-                    </a>
-                    <a class="nav-link {% if 'stats' in request.endpoint %}active{% endif %}" 
-                       href="{{ url_for('study_stats') }}">
-                        <i class="bi bi-graph-up"></i> <span>学习统计</span>
-                    </a>
-                    <a class="nav-link {% if request.endpoint == 'study_plan' %}active{% endif %}" 
-                       href="{{ url_for('study_plan') }}">
-                        <i class="bi bi-calendar-check"></i> <span>学习计划</span>
-                    </a>
-                    {% if session.user.role == 'admin' %}
-                    <hr class="my-2 mx-3">
-                    <a class="nav-link {% if request.endpoint == 'user_list' %}active{% endif %}" 
-                       href="{{ url_for('user_list') }}">
-                        <i class="bi bi-people"></i> <span>用户管理</span>
-                    </a>
-                    <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}" 
-                       href="{{ url_for('settings') }}">
-                        <i class="bi bi-gear"></i> <span>系统设置</span>
-                    </a>
-                    {% endif %}
-                </nav>
-            </div>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <nav class="nav flex-column py-3">
+                <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> <span>首页</span>
+                </a>
+                <a class="nav-link {% if 'exam' in request.endpoint %}active{% endif %}" href="{{ url_for('exam_list') }}">
+                    <i class="bi bi-file-earmark-text"></i> <span>试卷管理</span>
+                </a>
+                <a class="nav-link {% if request.endpoint == 'upload_exam' %}active{% endif %}" href="{{ url_for('upload_exam') }}">
+                    <i class="bi bi-cloud-upload"></i> <span>上传试卷</span>
+                </a>
+                <a class="nav-link {% if 'mistake' in request.endpoint %}active{% endif %}" href="{{ url_for('mistake_list') }}">
+                    <i class="bi bi-journal-x"></i> <span>错题本</span>
+                </a>
+                <a class="nav-link {% if request.endpoint == 'review_reminder' %}active{% endif %}" href="{{ url_for('review_reminder') }}">
+                    <i class="bi bi-bell"></i> <span>复习提醒</span>
+                </a>
+                <a class="nav-link {% if 'analysis' in request.endpoint %}active{% endif %}" href="{{ url_for('analysis_list') }}">
+                    <i class="bi bi-robot"></i> <span>分析管理</span>
+                </a>
+                <a class="nav-link {% if 'practice' in request.endpoint or 'correction' in request.endpoint %}active{% endif %}" href="{{ url_for('practice_list') }}">
+                    <i class="bi bi-pencil-square"></i> <span>专项练习</span>
+                </a>
+                <a class="nav-link {% if 'gaokao' in request.endpoint %}active{% endif %}" href="{{ url_for('gaokao_list') }}">
+                    <i class="bi bi-mortarboard"></i> <span>高考真题</span>
+                </a>
+                <a class="nav-link {% if 'stats' in request.endpoint %}active{% endif %}" href="{{ url_for('study_stats') }}">
+                    <i class="bi bi-graph-up"></i> <span>学习统计</span>
+                </a>
+                <a class="nav-link {% if request.endpoint == 'study_plan' %}active{% endif %}" href="{{ url_for('study_plan') }}">
+                    <i class="bi bi-calendar-check"></i> <span>学习计划</span>
+                </a>
+                {% if session.user.role == 'admin' %}
+                <hr class="my-2 mx-3">
+                <a class="nav-link {% if request.endpoint == 'user_list' %}active{% endif %}" href="{{ url_for('user_list') }}">
+                    <i class="bi bi-people"></i> <span>用户管理</span>
+                </a>
+                <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}" href="{{ url_for('settings') }}">
+                    <i class="bi bi-gear"></i> <span>系统设置</span>
+                </a>
+                {% endif %}
+            </nav>
+        </aside>
 
-            <!-- 侧边栏切换按钮 -->
-            <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
-                <i class="bi bi-chevron-left"></i>
-            </button>
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="切换侧边栏">
+            <i class="bi bi-chevron-left"></i>
+        </button>
 
-            <!-- 主内容区 -->
-            <div class="col-lg-10 col-md-9 p-4 main-content" id="mainContent">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-                
-                {% block content %}{% endblock %}
-            </div>
-        </div>
+        <main class="main-content" id="mainContent">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        // ========== 页面加载动画 ==========
         window.addEventListener('load', function() {
             setTimeout(function() {
-                document.getElementById('pageLoader').classList.add('hidden');
+                const loader = document.getElementById('pageLoader');
+                if (loader) loader.classList.add('hidden');
             }, 500);
         });
 
-        // ========== 深色模式切换 ==========
         function toggleTheme() {
             const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            
+            const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             html.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            
             const icon = document.getElementById('themeIcon');
-            icon.className = newTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+            if (icon) icon.className = newTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
         }
 
-        // 初始化主题
         function initTheme() {
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
-            
             const icon = document.getElementById('themeIcon');
-            if (icon) {
-                icon.className = savedTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
-            }
+            if (icon) icon.className = savedTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
         }
 
-        // ========== 侧边栏折叠 ==========
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.getElementById('sidebarToggle');
-            const isCollapsed = sidebar.classList.contains('collapsed');
-            
-            sidebar.classList.toggle('collapsed');
-            toggle.classList.toggle('collapsed');
-            
-            localStorage.setItem('sidebarCollapsed', !isCollapsed);
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+            if (isMobile) {
+                sidebar.classList.toggle('mobile-show');
+                return;
+            }
+
+            const isCollapsed = sidebar.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed', isCollapsed);
+            localStorage.setItem('sidebarCollapsed', isCollapsed ? 'true' : 'false');
         }
 
-        // 初始化侧边栏
         function initSidebar() {
-            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (isCollapsed) {
-                document.getElementById('sidebar').classList.add('collapsed');
-                document.getElementById('sidebarToggle').classList.add('collapsed');
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            if (!sidebar || !toggle) return;
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                sidebar.classList.add('collapsed');
+                toggle.classList.add('collapsed');
             }
         }
 
-        // ========== 初始化 ==========
         document.addEventListener('DOMContentLoaded', function() {
             initTheme();
             initSidebar();
