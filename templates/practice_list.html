@@ -5,12 +5,57 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0"><i class="bi bi-pencil-square"></i> 专项练习</h4>
-    <a href="{{ url_for('correction_list') }}" class="btn btn-outline-warning">
-        <i class="bi bi-journal-check"></i> 改错管理
-    </a>
+    <a href="{{ url_for('mistake_list') }}" class="btn btn-outline-warning"><i class="bi bi-journal-x"></i> 错题本</a>
 </div>
 
-<!-- 筛选条件 -->
+<div class="card mb-4 border-primary">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+            <div>
+                <h5 class="mb-1"><i class="bi bi-stars"></i> 智能生成专项练习</h5>
+                <p class="text-muted mb-0">系统会优先按错题本里的薄弱知识点，从高考真题库中挑题组卷。</p>
+            </div>
+            {% if weak_points %}
+            <div class="text-end">
+                {% for item in weak_points[:3] %}
+                <span class="badge bg-light text-dark border me-1">{{ item.name }} · {{ item.count }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        <form method="POST" action="{{ url_for('auto_generate_practice') }}" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">科目</label>
+                <select class="form-select" name="subject">
+                    <option value="">自动选择薄弱科目</option>
+                    {% for s in subjects %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">知识点</label>
+                <input class="form-control" name="knowledge_point" list="weakPointList" placeholder="留空则自动选择">
+                <datalist id="weakPointList">
+                    {% for item in weak_points %}<option value="{{ item.name }}">{% endfor %}
+                </datalist>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">题型</label>
+                <select class="form-select" name="question_type">
+                    <option value="">自动</option>
+                    <option>选择题</option><option>填空题</option><option>解答题</option><option>实验题</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">题量</label>
+                <input type="number" class="form-control" name="count" value="8" min="3" max="20">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100"><i class="bi bi-lightning-charge"></i> 生成练习</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
@@ -18,9 +63,7 @@
                 <label class="form-label">科目</label>
                 <select class="form-select" name="subject">
                     <option value="">全部科目</option>
-                    {% for s in subjects %}
-                    <option value="{{ s }}" {{ 'selected' if selected_subject == s }}>{{ s }}</option>
-                    {% endfor %}
+                    {% for s in subjects %}<option value="{{ s }}" {{ 'selected' if selected_subject == s }}>{{ s }}</option>{% endfor %}
                 </select>
             </div>
             <div class="col-md-4">
@@ -32,37 +75,19 @@
                 </select>
             </div>
             <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary me-2">
-                    <i class="bi bi-search"></i> 筛选
-                </button>
-                <a href="{{ url_for('practice_list') }}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-counterclockwise"></i> 重置
-                </a>
+                <button type="submit" class="btn btn-primary me-2"><i class="bi bi-search"></i> 筛选</button>
+                <a href="{{ url_for('practice_list') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i> 重置</a>
             </div>
         </form>
     </div>
 </div>
 
-<!-- 练习列表 -->
 {% if sessions %}
 <div class="card">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>ID</th>
-                        <th>练习标题</th>
-                        <th>科目</th>
-                        <th>类型</th>
-                        <th>题目数</th>
-                        <th>正确数</th>
-                        <th>得分</th>
-                        <th>状态</th>
-                        <th>开始时间</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light"><tr><th>ID</th><th>练习标题</th><th>科目</th><th>类型</th><th>题目数</th><th>正确数</th><th>得分</th><th>状态</th><th>开始时间</th><th>操作</th></tr></thead>
                 <tbody>
                     {% for session in sessions %}
                     <tr>
@@ -72,36 +97,14 @@
                         <td><span class="badge bg-info">{{ session.practice_type }}</span></td>
                         <td>{{ session.total_questions }}</td>
                         <td>{{ session.correct_count }}</td>
-                        <td>
-                            {% if session.status == '已完成' %}
-                                {% if session.score >= 80 %}
-                                    <span class="text-success fw-bold">{{ session.score|round(1) }}%</span>
-                                {% elif session.score >= 60 %}
-                                    <span class="text-warning fw-bold">{{ session.score|round(1) }}%</span>
-                                {% else %}
-                                    <span class="text-danger fw-bold">{{ session.score|round(1) }}%</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if session.status == '进行中' %}
-                                <span class="badge bg-warning">进行中</span>
-                            {% else %}
-                                <span class="badge bg-success">已完成</span>
-                            {% endif %}
-                        </td>
+                        <td>{% if session.status == '已完成' %}<span class="fw-bold">{{ session.score|round(1) }}%</span>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                        <td><span class="badge {{ 'bg-warning' if session.status == '进行中' else 'bg-success' }}">{{ session.status }}</span></td>
                         <td><small>{{ session.started_at }}</small></td>
                         <td>
                             {% if session.status == '进行中' %}
-                                <a href="{{ url_for('do_practice', session_id=session.id) }}" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-play"></i> 继续
-                                </a>
+                            <a href="{{ url_for('do_practice', session_id=session.id) }}" class="btn btn-sm btn-primary"><i class="bi bi-play"></i> 继续</a>
                             {% else %}
-                                <a href="{{ url_for('practice_result', session_id=session.id) }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i> 查看
-                                </a>
+                            <a href="{{ url_for('practice_result', session_id=session.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> 查看</a>
                             {% endif %}
                         </td>
                     </tr>
@@ -112,15 +115,6 @@
     </div>
 </div>
 {% else %}
-<div class="card">
-    <div class="card-body text-center py-5">
-        <i class="bi bi-pencil-square text-muted" style="font-size: 3rem;"></i>
-        <p class="mt-3 text-muted">暂无练习记录</p>
-        <p class="text-muted">在错题本中点击"开始练习"按钮开始专项练习</p>
-        <a href="{{ url_for('mistake_list') }}" class="btn btn-primary">
-            <i class="bi bi-journal-x"></i> 前往错题本
-        </a>
-    </div>
-</div>
+<div class="card"><div class="card-body text-center py-5"><i class="bi bi-pencil-square text-muted" style="font-size: 3rem;"></i><p class="mt-3 text-muted">暂无练习记录</p></div></div>
 {% endif %}
 {% endblock %}
