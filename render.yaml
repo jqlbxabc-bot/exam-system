@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: exam-system-backup
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: exam-system-backup-db
+          property: connectionString
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+databases:
+  - name: exam-system-backup-db
+    plan: free
+    databaseName: exam_system
+    user: exam_system_user
