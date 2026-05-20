@@ -2,9 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# 安装系统依赖（包括 antiword 用于 .doc 文件）
+# 安装系统依赖（包括 OCR 和 .doc 文档提取工具）
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
+    tesseract-ocr-eng \
     tesseract-ocr-chi-sim \
     antiword \
     catdoc \
