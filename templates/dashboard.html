@@ -5,6 +5,37 @@
 {% block extra_css %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
+    @media (min-width: 769px) {
+        body > .container-fluid > .row {
+            position: relative;
+            display: block;
+        }
+
+        body > .container-fluid > .row > .sidebar {
+            position: fixed;
+            left: 0;
+            top: 56px;
+            bottom: 0;
+            width: var(--sidebar-width) !important;
+            max-width: var(--sidebar-width) !important;
+            height: calc(100vh - 56px);
+            z-index: 1000;
+        }
+
+        body > .container-fluid > .row > .main-content {
+            margin-left: var(--sidebar-width) !important;
+            width: calc(100% - var(--sidebar-width)) !important;
+            max-width: calc(100% - var(--sidebar-width)) !important;
+            flex: none !important;
+        }
+
+        body > .container-fluid > .row > .sidebar.collapsed ~ .main-content {
+            margin-left: var(--sidebar-collapsed) !important;
+            width: calc(100% - var(--sidebar-collapsed)) !important;
+            max-width: calc(100% - var(--sidebar-collapsed)) !important;
+        }
+    }
+
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -171,7 +202,6 @@
 
 <!-- 图表区域 -->
 <div class="charts-grid">
-    <!-- 成绩趋势图 -->
     <div class="card chart-card">
         <h6 class="card-title mb-3">
             <i class="bi bi-graph-up-arrow"></i> 成绩趋势
@@ -179,7 +209,6 @@
         <canvas id="scoreTrendChart"></canvas>
     </div>
     
-    <!-- 科目分布图 -->
     <div class="card chart-card">
         <h6 class="card-title mb-3">
             <i class="bi bi-pie-chart"></i> 科目分布
@@ -222,7 +251,6 @@
 </div>
 
 <div class="row">
-    <!-- 最近试卷 -->
     <div class="col-lg-8 mb-4">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -260,8 +288,7 @@
                                     <td>{{ exam.total_score }}分</td>
                                     <td>{{ exam.created_at[:10] }}</td>
                                     <td>
-                                        <a href="{{ url_for('exam_detail', exam_id=exam.id) }}" 
-                                           class="btn btn-sm btn-outline-primary">
+                                        <a href="{{ url_for('exam_detail', exam_id=exam.id) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="bi bi-eye"></i>
                                         </a>
                                     </td>
@@ -280,7 +307,6 @@
         </div>
     </div>
     
-    <!-- 最近活动 -->
     <div class="col-lg-4 mb-4">
         <div class="card">
             <div class="card-header">
@@ -310,7 +336,6 @@
 
 {% block extra_js %}
 <script>
-    // 成绩趋势图
     const scoreTrendCtx = document.getElementById('scoreTrendChart').getContext('2d');
     new Chart(scoreTrendCtx, {
         type: 'line',
@@ -335,9 +360,7 @@
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     backgroundColor: '#1e293b',
                     titleColor: '#f1f5f9',
@@ -349,20 +372,13 @@
             scales: {
                 y: {
                     beginAtZero: false,
-                    grid: {
-                        color: 'rgba(0,0,0,0.05)'
-                    }
+                    grid: { color: 'rgba(0,0,0,0.05)' }
                 },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
+                x: { grid: { display: false } }
             }
         }
     });
 
-    // 科目分布图
     const subjectDistCtx = document.getElementById('subjectDistChart').getContext('2d');
     new Chart(subjectDistCtx, {
         type: 'doughnut',
@@ -370,17 +386,7 @@
             labels: {{ subject_names|tojson }},
             datasets: [{
                 data: {{ subject_counts|tojson }},
-                backgroundColor: [
-                    '#4f46e5',
-                    '#10b981',
-                    '#f59e0b',
-                    '#ef4444',
-                    '#8b5cf6',
-                    '#06b6d4',
-                    '#ec4899',
-                    '#84cc16',
-                    '#f97316'
-                ],
+                backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316'],
                 borderWidth: 0,
                 hoverOffset: 10
             }]
