@@ -8,6 +8,15 @@ import re
 
 _original_import = builtins.__import__
 
+VISION_PROVIDER_MODELS = {
+    'openai': ['gpt-4o', 'gpt-4.1', 'gpt-5', 'vision'],
+    'qwen': ['vl', 'qvq', 'vision'],
+    'zhipu': ['glm-4v', 'vision'],
+    'claude': ['claude-3', 'claude-4'],
+}
+
+TEXT_ONLY_PROVIDERS = {'deepseek', 'moonshot', 'local'}
+
 
 def _score_ocr_text(text):
     text = text or ''
@@ -18,6 +27,17 @@ def _score_ocr_text(text):
     latin = len(re.findall(r'[A-Za-z0-9]', compact))
     exam_words = sum(8 for word in ['试卷', '考试', '选择题', '填空题', '解答题', '数学', '语文', '英语', '高三', '总分'] if word in text)
     return len(compact) + chinese * 2 + latin + exam_words
+
+
+def _supports_vision(analyzer):
+    provider = (getattr(analyzer, 'provider', '') or '').lower()
+    model = (getattr(analyzer, 'model', '') or '').lower()
+    if provider in TEXT_ONLY_PROVIDERS:
+        return False
+    model_keywords = VISION_PROVIDER_MODELS.get(provider, [])
+    if not model_keywords:
+        return False
+    return any(keyword in model for keyword in model_keywords)
 
 
 def _build_ocr_variants(image_path):
@@ -99,27 +119,55 @@ def _improved_extract_text_from_image(original_method, image_path, recognizer_cl
         return ''
 
 
+def _analyze_image_with_capability_check(original_method, recognizer_cls, image_path):
+    try:
+        from ai_analyzer import get_analyzer
+        analyzer = get_analyzer()
+    except Exception as exc:
+        print(f'Unable to read model capability, using OCR fallback: {exc}')
+        analyzer = None
+
+    if analyzer and _supports_vision(analyzer):
+        print(f'Model supports image recognition: provider={analyzer.provider}, model={analyzer.model}')
+        return original_method(image_path)
+
+    if analyzer:
+        print(f'Model does not support image recognition, using OCR first: provider={analyzer.provider}, model={analyzer.model}')
+    text = recognizer_cls.extract_text_from_image(image_path)
+    if text and len(text.strip()) > 10:
+        return recognizer_cls.analyze_with_ai(text, [image_path])
+
+    print('OCR text is too short for AI analysis; image recognition skipped for text-only model')
+    return None
+
+
 def _patch_exam_recognizer(module):
     recognizer_cls = getattr(module, 'ExamRecognizer', None)
     if not recognizer_cls or getattr(recognizer_cls, '_enhanced_ocr_patched', False):
         return
 
     original_extract = recognizer_cls.extract_text_from_image
+    original_analyze_image = recognizer_cls.analyze_image_with_ai
 
     @staticmethod
     def extract_text_from_image(image_path):
         return _improved_extract_text_from_image(original_extract, image_path, recognizer_cls)
 
+    @staticmethod
+    def analyze_image_with_ai(image_path):
+        return _analyze_image_with_capability_check(original_analyze_image, recognizer_cls, image_path)
+
     recognizer_cls.extract_text_from_image = extract_text_from_image
+    recognizer_cls.analyze_image_with_ai = analyze_image_with_ai
+    recognizer_cls.model_supports_vision = staticmethod(lambda analyzer: _supports_vision(analyzer))
     recognizer_cls._enhanced_ocr_patched = True
-    print('Enhanced OCR preprocessing is enabled for photographed exams')
+    print('Enhanced OCR and model capability routing are enabled for photographed exams')
 
 
 def _import_with_ocr_patch(name, globals=None, locals=None, fromlist=(), level=0):
     module = _original_import(name, globals, locals, fromlist, level)
-    target = module
     if name == 'exam_recognizer':
-        _patch_exam_recognizer(target)
+        _patch_exam_recognizer(module)
     return module
 
 
