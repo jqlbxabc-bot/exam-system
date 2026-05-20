@@ -5,6 +5,7 @@
 import builtins
 import os
 import re
+import shutil
 
 _original_import = builtins.__import__
 
@@ -40,6 +41,34 @@ def _supports_vision(analyzer):
     return any(keyword in model for keyword in model_keywords)
 
 
+def _configure_tesseract(pytesseract):
+    windows_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    linux_cmd = shutil.which('tesseract')
+    if os.path.exists(windows_cmd):
+        pytesseract.pytesseract.tesseract_cmd = windows_cmd
+    elif linux_cmd:
+        pytesseract.pytesseract.tesseract_cmd = linux_cmd
+
+    if not os.environ.get('TESSDATA_PREFIX'):
+        for path in [
+            '/usr/share/tesseract-ocr/5/tessdata',
+            '/usr/share/tesseract-ocr/4.00/tessdata',
+            '/usr/share/tesseract-ocr/tessdata',
+            '/usr/share/tessdata',
+        ]:
+            if os.path.exists(path):
+                os.environ['TESSDATA_PREFIX'] = path
+                break
+
+
+def _available_ocr_languages(pytesseract):
+    try:
+        return set(pytesseract.get_languages(config=''))
+    except Exception as exc:
+        print(f'Unable to list OCR languages: {exc}')
+        return set()
+
+
 def _build_ocr_variants(image_path):
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
@@ -48,8 +77,8 @@ def _build_ocr_variants(image_path):
 
     width, height = image.size
     max_side = max(width, height)
-    if max_side and max_side < 1800:
-        scale = min(3.0, 1800 / max_side)
+    if max_side and max_side < 2200:
+        scale = min(3.0, 2200 / max_side)
         image = image.resize((int(width * scale), int(height * scale)), Image.Resampling.LANCZOS)
 
     gray = ImageOps.grayscale(image)
@@ -71,13 +100,25 @@ def _improved_extract_text_from_image(original_method, image_path, recognizer_cl
     try:
         import pytesseract
 
-        tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-        if os.path.exists(tesseract_cmd):
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        _configure_tesseract(pytesseract)
+        languages = _available_ocr_languages(pytesseract)
+        if languages:
+            print(f'OCR languages available: {sorted(languages)}')
+        else:
+            print('OCR languages unavailable; tesseract may not be installed correctly')
 
         best_text = ''
         best_score = 0
-        langs = ['chi_sim+eng', 'eng']
+        langs = []
+        if 'chi_sim' in languages and 'eng' in languages:
+            langs.append('chi_sim+eng')
+        if 'chi_sim' in languages:
+            langs.append('chi_sim')
+        if 'eng' in languages:
+            langs.append('eng')
+        if not langs:
+            langs = ['chi_sim+eng', 'chi_sim', 'eng']
+
         configs = [
             '--oem 3 --psm 6',
             '--oem 3 --psm 3',
@@ -100,6 +141,7 @@ def _improved_extract_text_from_image(original_method, image_path, recognizer_cl
         if best_text and best_score >= 20:
             print(f'Enhanced OCR success, score={best_score}, length={len(best_text)}')
             return best_text
+        print(f'Enhanced OCR returned weak text, score={best_score}, length={len(best_text)}')
     except ImportError:
         print('pytesseract is not installed')
     except Exception as exc:
