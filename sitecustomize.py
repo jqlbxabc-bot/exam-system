@@ -27,6 +27,20 @@ SUBJECT_KEYWORD_RULES = {
         '向量': ['向量', '数量积', '坐标表示'],
         '复数': ['复数', '虚数', 'z=', 'i'],
     },
+    '语文': {
+        '现代文阅读': ['阅读', '文本', '论述', '小说', '散文', '材料'],
+        '古诗文阅读': ['文言', '诗歌', '默写', '翻译', '古代'],
+        '语言文字运用': ['成语', '病句', '衔接', '压缩', '补写'],
+        '写作': ['作文', '写作', '立意', '材料作文'],
+    },
+    '英语': {
+        '阅读理解': ['read', 'passage', 'according to', 'main idea', 'paragraph'],
+        '完形填空': ['cloze', 'blank', 'choose the best answer'],
+        '语法填空': ['grammar', 'proper form', 'fill in'],
+        '短文改错': ['correct', 'mistake', 'error'],
+        '书面表达': ['write', 'letter', 'essay', 'composition'],
+        '七选五': ['seven', 'five', 'A-G'],
+    },
     '物理': {
         '力学': ['受力', '加速度', '速度', '位移', '牛顿', '动能', '动量', '机械能', '圆周运动'],
         '电磁学': ['电场', '磁场', '电流', '电压', '电阻', '感应', '洛伦兹', '安培'],
@@ -49,20 +63,6 @@ SUBJECT_KEYWORD_RULES = {
         '动物生理': ['神经', '体液', '免疫', '内环境', '激素'],
         '植物生理': ['光合作用', '呼吸作用', '植物激素', '蒸腾'],
         '生物技术': ['基因工程', '细胞工程', '发酵', 'PCR', '酶工程'],
-    },
-    '语文': {
-        '现代文阅读': ['阅读', '文本', '论述', '小说', '散文', '材料'],
-        '古诗文阅读': ['文言', '诗歌', '默写', '翻译', '古代'],
-        '语言文字运用': ['成语', '病句', '衔接', '压缩', '补写'],
-        '写作': ['作文', '写作', '立意', '材料作文'],
-    },
-    '英语': {
-        '阅读理解': ['read', 'passage', 'according to', 'main idea', 'paragraph'],
-        '完形填空': ['cloze', 'blank', 'choose the best answer'],
-        '语法填空': ['grammar', 'proper form', 'fill in'],
-        '短文改错': ['correct', 'mistake', 'error'],
-        '书面表达': ['write', 'letter', 'essay', 'composition'],
-        '七选五': ['seven', 'five', 'A-G'],
     },
     '历史': {
         '中国古代史': ['秦', '汉', '唐', '宋', '元', '明', '清', '科举', '君主专制'],
@@ -128,8 +128,7 @@ def _infer_category_and_points(subject, content):
             best_hits = hits
 
     if best_category:
-        points = best_hits[:4] or [best_category]
-        return best_category, '、'.join(points)
+        return best_category, '、'.join(best_hits[:4] or [best_category])
 
     try:
         from gaokao_classifier import SUBJECT_CATEGORIES
@@ -142,8 +141,77 @@ def _infer_category_and_points(subject, content):
     return '未分类', '待人工确认'
 
 
+def _patch_search_gaokao_questions(module):
+    original_search = getattr(module, 'search_gaokao_questions', None)
+    if not original_search or getattr(original_search, '_accepts_upload_filters', False):
+        return
+
+    def search_gaokao_questions(subject=None, category=None, year=None, difficulty=None,
+                                keyword=None, knowledge_point=None, question_type=None,
+                                limit=100, page=None, per_page=20):
+        conn = module.get_connection()
+        query = 'SELECT * FROM gaokao_questions WHERE 1=1'
+        count_query = 'SELECT COUNT(*) as cnt FROM gaokao_questions WHERE 1=1'
+        params = []
+
+        filters = [
+            ('subject=%s', subject),
+            ('category=%s', category),
+            ('year=%s', year),
+            ('difficulty=%s', difficulty),
+            ('question_type=%s', question_type),
+        ]
+        for clause, value in filters:
+            if value:
+                query += f' AND {clause}'
+                count_query += f' AND {clause}'
+                params.append(value)
+
+        if knowledge_point:
+            query += ' AND knowledge_point LIKE %s'
+            count_query += ' AND knowledge_point LIKE %s'
+            params.append(f'%{knowledge_point}%')
+        if keyword:
+            query += ' AND (content LIKE %s OR knowledge_point LIKE %s)'
+            count_query += ' AND (content LIKE %s OR knowledge_point LIKE %s)'
+            params.extend([f'%{keyword}%', f'%{keyword}%'])
+
+        cur = module._execute(conn, count_query, params)
+        total = module._fetchone(cur)['cnt']
+
+        if page:
+            offset = (page - 1) * per_page
+            query += ' ORDER BY created_at DESC LIMIT %s OFFSET %s'
+            params.extend([per_page, offset])
+        else:
+            query += ' ORDER BY created_at DESC LIMIT %s'
+            params.append(limit)
+
+        cur = module._execute(conn, query, params)
+        results = module._fetchall(cur)
+        conn.close()
+
+        if page:
+            return {
+                'items': results,
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+                'pages': (total + per_page - 1) // per_page,
+                'has_prev': page > 1,
+                'has_next': page * per_page < total,
+                'prev_num': page - 1 if page > 1 else None,
+                'next_num': page + 1 if page * per_page < total else None,
+            }
+        return {'items': results, 'total': total}
+
+    search_gaokao_questions._accepts_upload_filters = True
+    module.search_gaokao_questions = search_gaokao_questions
+
+
 def _patch_database_module(module):
     if getattr(module, '_gaokao_upload_auto_classification_patched', False):
+        _patch_search_gaokao_questions(module)
         return
 
     original_add_question = getattr(module, 'add_question', None)
@@ -197,6 +265,7 @@ def _patch_database_module(module):
         return qid
 
     module.add_question = add_question
+    _patch_search_gaokao_questions(module)
     module._gaokao_upload_auto_classification_patched = True
 
 
