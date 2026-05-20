@@ -4,6 +4,9 @@ import os
 import sitecustomize  # noqa: F401
 
 from app import app
+from runtime_patches import apply_runtime_patches
+
+apply_runtime_patches(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5001))
