@@ -2,6 +2,8 @@
 """Container startup entrypoint."""
 import os
 import sys
+
+import runtime_ai_patch  # noqa: F401 - installs AI provider compatibility hooks
 from gunicorn.app.wsgiapp import run
 
 port = (
