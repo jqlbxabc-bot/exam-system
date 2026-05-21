@@ -4,6 +4,7 @@ import os
 import sitecustomize  # noqa: F401
 import runtime_ai_patch  # noqa: F401
 import ocr_patches  # noqa: F401
+import runtime_exam_recognition_patch  # noqa: F401
 
 from app import app
 from ai_diagnostics import register_ai_diagnostics
