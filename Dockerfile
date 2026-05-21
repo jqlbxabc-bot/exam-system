@@ -19,4 +19,6 @@ COPY . .
 RUN mkdir -p data uploads/exams logs
 RUN chmod +x start.sh
 
+EXPOSE 80
+
 CMD ["python", "run.py"]
