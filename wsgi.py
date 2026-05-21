@@ -2,6 +2,7 @@ import os
 
 # Ensure runtime compatibility hooks are active before importing the Flask app.
 import sitecustomize  # noqa: F401
+import runtime_ai_patch  # noqa: F401
 import ocr_patches  # noqa: F401
 
 from app import app
