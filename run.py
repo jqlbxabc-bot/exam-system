@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Railway 启动入口 - 用Python读取PORT，避免shell展开问题"""
+"""Container startup entrypoint."""
 import os
 import sys
 from gunicorn.app.wsgiapp import run
 
-port = os.environ.get('PORT', '5001')
+port = (
+    os.environ.get('PORT')
+    or os.environ.get('SERVER_PORT')
+    or os.environ.get('TENCENTCLOUD_RUN_PORT')
+    or '80'
+)
 print(f"Starting gunicorn on port {port}")
 
 sys.argv = [
