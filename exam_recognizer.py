@@ -684,18 +684,23 @@ class ExamRecognizer:
         # 使用AI进行识别
         if use_ai:
             try:
-                # 如果有文字，用AI分析文字
-                if text and len(text) > 10:
-                    print("使用AI分析OCR文字...")
-                    ai_result = ExamRecognizer.analyze_with_ai(text, [file_path], original_filename)
+                if is_image:
+                    # 图片：优先AI视觉识别（直接看懂图片内容），失败再降级OCR
+                    print("尝试AI图片视觉分析...")
+                    ai_result = ExamRecognizer.analyze_image_with_ai(file_path)
+                    if not ai_result and text and len(text) > 10:
+                        print("视觉识别失败/不支持，降级为OCR文本分析...")
+                        ai_result = ExamRecognizer.analyze_with_ai(text, [file_path], original_filename)
+                    elif not ai_result:
+                        print("图片AI识别完全失败（无视觉模型且OCR无文字）")
                 elif is_pdf:
                     # PDF文件，用AI分析PDF（会内部提取文字+调用AI）
                     print("使用AI分析PDF...")
                     ai_result = ExamRecognizer.analyze_pdf_with_ai(file_path)
-                elif is_image:
-                    # 图片文件，AI视觉分析（自动降级为 OCR + 文本分析）
-                    print("尝试AI图片分析...")
-                    ai_result = ExamRecognizer.analyze_image_with_ai(file_path)
+                elif text and len(text) > 10:
+                    # 有文字内容的文档：用AI分析文字
+                    print("使用AI分析OCR文字...")
+                    ai_result = ExamRecognizer.analyze_with_ai(text, [file_path], original_filename)
                 else:
                     # docx/doc 等文档格式：OCR 可能已失败，直接尝试用文档转文字+AI
                     print(f"OCR未提取文字，使用AI分析文档内容...")
@@ -738,36 +743,62 @@ class ExamRecognizer:
 
         analyzer = get_analyzer()
 
-        # 支持视觉的提供商（OpenAI兼容 API 且模型支持 vision）
-        vision_providers = ['openai', 'deepseek', 'moonshot', 'qwen', 'zhipu']
-        use_vision = analyzer.provider in vision_providers and analyzer.api_key
+        # 已知支持视觉的模型列表（避免文本模型收到图片请求后 400 错误）
+        vision_model_keywords = ['vision', 'vl', 'vl2', 'gpt-4o', 'gpt-4v', 'claude-3',
+                                  'gemini', 'qwen-vl', 'glm-4v', 'yi-vision']
+        model_lower = (analyzer.model or '').lower()
+        is_vision_model = any(kw in model_lower for kw in vision_model_keywords)
+        # 也检查通用的 vision-compatible provider（如果模型名不明确但 provider 已知支持 vision）
+        vision_providers = ['openai', 'moonshot', 'qwen', 'zhipu']
 
-        prompt_text = """请分析这张试卷图片，提取以下信息并以JSON格式返回：
+        use_vision = is_vision_model and analyzer.api_key
 
-1. title: 试卷标题
-2. subject: 学科（语文/数学/英语/物理/化学/生物/历史/地理/政治）
-3. grade: 年级（高一/高二/高三）
-4. exam_type: 考试类型（月考/期中/期末/模拟/高考真题/竞赛）
-5. total_score: 总分（数字）
-6. exam_date: 考试日期（YYYY-MM-DD格式，如果无法识别则为null）
-7. description: 试卷简要描述
-8. text: 试卷中的主要文字内容（前500字）
+        if not use_vision and not is_vision_model and analyzer.provider in vision_providers:
+            # provider 支持 vision 但模型名无法确认，则尝试发送（可能会失败回退）
+            use_vision = True
 
-请尽量准确识别。只返回JSON，不要其他内容。"""
+        prompt_text = """你是一个专业的试卷分析助手。请仔细查看这张试卷图片，识别图片中所有的文字内容，包括：
 
-        if not use_vision:
+- 试卷标题（通常在最上方，大字）
+- 考试说明和注意事项
+- 每一道题目的题号、题干内容
+- 选择题的选项（A/B/C/D）
+- 如果有答案，也一并提取
+
+请根据识别到的内容，以JSON格式返回：
+
+{
+    "title": "试卷标题（从图片顶部大字提取）",
+    "subject": "学科（根据实际题目内容判断：语文/数学/英语/物理/化学/生物/历史/地理/政治）",
+    "grade": "年级（根据题目难度判断：高一/高二/高三）",
+    "exam_type": "考试类型（月考/期中/期末/模拟/高考真题/竞赛）",
+    "total_score": 总分数字（如150、100）,
+    "exam_date": "YYYY-MM-DD（如无法识别则为null）",
+    "description": "简要描述试卷结构和内容（如：包含选择题12道、填空题4道、解答题6道）",
+    "text": "从图片中提取的前500字实际文字内容"
+}
+
+重要：text字段必须包含从图片中实际读到的文字，不能是模板文字或占位符。只返回JSON，不要其他内容。"""
+
+        if not use_vision or not analyzer.api_key:
             return None
 
         try:
             with open(image_path, 'rb') as f:
                 img_data = base64.b64encode(f.read()).decode()
 
+            # 根据文件扩展名确定 MIME 类型
+            ext = os.path.splitext(image_path)[1].lower()
+            mime_map = {'.jpg': 'jpeg', '.jpeg': 'jpeg', '.png': 'png',
+                       '.gif': 'gif', '.bmp': 'bmp', '.webp': 'webp'}
+            mime_type = mime_map.get(ext, 'jpeg')
+
             messages = [{
                 'role': 'user',
                 'content': [
                     {'type': 'text', 'text': prompt_text},
                     {'type': 'image_url',
-                     'image_url': {'url': f'data:image/jpeg;base64,{img_data}'}}
+                     'image_url': {'url': f'data:image/{mime_type};base64,{img_data}'}}
                 ]
             }]
             headers = {
@@ -789,12 +820,30 @@ class ExamRecognizer:
             if response.status_code == 200:
                 result = response.json()
                 content = result['choices'][0]['message']['content']
-                return ExamRecognizer.parse_json_response(content)
+                parsed = ExamRecognizer.parse_json_response(content)
+                if parsed and parsed.get('subject') and parsed.get('title'):
+                    return parsed
+                print(f"视觉识别返回内容不完整: {parsed}")
+                return parsed
 
-            print(f"视觉识别 API 返回 {response.status_code}，降级为 OCR + 文本分析")
+            # 400 通常表示模型不支持 vision
+            if response.status_code == 400:
+                print(f"视觉识别失败(模型可能不支持图片): {response.text[:200]}")
+            else:
+                print(f"视觉识别 API 返回 {response.status_code}")
 
         except Exception as e:
-            print(f"AI视觉分析失败: {e}，降级为 OCR + 文本分析")
+            print(f"AI视觉分析失败: {e}")
+
+        # 降级：OCR 提取文字后用文本 AI 分析
+        try:
+            ocr_text = ExamRecognizer.extract_text(image_path)
+            if ocr_text and len(ocr_text.strip()) > 20:
+                print(f"视觉识别失败，使用OCR文字({len(ocr_text)}字符)进行文本分析...")
+                source_name = os.path.basename(image_path)
+                return ExamRecognizer.analyze_with_ai(ocr_text, [image_path], source_name)
+        except Exception as e2:
+            print(f"OCR 降级方案也失败: {e2}")
 
         return None
     
