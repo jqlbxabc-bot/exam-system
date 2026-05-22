@@ -474,25 +474,63 @@ class ExamRecognizer:
     
     @staticmethod
     def extract_questions(text):
-        """提取题目"""
+        """提取题目 - 仅匹配行首的题号，避免误匹配文中数字"""
         questions = []
+        if not text:
+            return questions
         
-        # 匹配题号模式
-        patterns = [
-            r'(\d+)[.、．]\s*(.*?)(?=\d+[.、．]|\Z)',
-            r'[（(](\d+)[)）]\s*(.*?)(?=[（(]\d+[)）]|\Z)',
-            r'第(\d+)题[：:]\s*(.*?)(?=第\d+题|\Z)',
-        ]
+        lines = text.strip().split('\n')
         
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.DOTALL)
-            for num, content in matches:
-                if len(content.strip()) > 5:
-                    questions.append({
-                        'number': int(num),
-                        'content': content.strip()[:500],
-                        'type': ExamRecognizer._guess_question_type(content)
-                    })
+        # 逐行匹配题号模式
+        question_start_pattern = re.compile(
+            r'^[（(]?\s*(\d{1,3})\s*[)）]{1}\s*'   # (1) 或 1)
+            r'|^\s*(\d{1,3})\s*[.、．]\s*'         # 1. 或 1、
+            r'|^第\s*(\d{1,3})\s*题\s*'             # 第一题、第二题
+        )
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line:
+                i += 1
+                continue
+            
+            match = question_start_pattern.search(line)
+            if match:
+                groups = match.groups()
+                # 三个捕获组中只有一个会匹配成功
+                num_str = next((g for g in groups if g is not None), None)
+                if num_str:
+                    num = int(num_str)
+                    # 截取题号后的内容
+                    content_start = match.end()
+                    content = line[content_start:].strip()
+                    
+                    # 收集后续行（直到遇到下一个题号或空行后接题号）
+                    j = i + 1
+                    while j < len(lines):
+                        next_line = lines[j].strip()
+                        if not next_line:
+                            # 空行，检查后面是否是新题号
+                            if j + 1 < len(lines) and question_start_pattern.match(lines[j + 1].strip()):
+                                break
+                            j += 1
+                            continue
+                        if question_start_pattern.match(next_line):
+                            break
+                        content += '\n' + lines[j].strip()
+                        j += 1
+                    
+                    i = j  # 跳过已处理的行
+                    
+                    if len(content.strip()) > 3:
+                        questions.append({
+                            'number': num,
+                            'content': content.strip()[:500],
+                            'type': ExamRecognizer._guess_question_type(content)
+                        })
+                    continue
+            i += 1
         
         return questions
     
@@ -547,20 +585,9 @@ class ExamRecognizer:
 
 只返回JSON，不要其他内容。"""
         
-        analyzer = get_analyzer()
-        result = analyzer.chat(prompt)
-        
         try:
-            # 尝试解析JSON
-            # 移除可能的markdown代码块标记
-            result = result.strip()
-            if result.startswith('```'):
-                result = result.split('\n', 1)[1] if '\n' in result else result[3:]
-            if result.endswith('```'):
-                result = result[:-3]
-            if result.startswith('json'):
-                result = result[4:]
-            
+            analyzer = get_analyzer()
+            result = analyzer.chat(prompt)
             return ExamRecognizer.parse_json_response(result)
         except Exception as e:
             print(f"AI分析调用失败: {e}")
@@ -662,15 +689,21 @@ class ExamRecognizer:
                     print("使用AI分析OCR文字...")
                     ai_result = ExamRecognizer.analyze_with_ai(text, [file_path], original_filename)
                 elif is_pdf:
-                    # PDF文件，用AI分析PDF
+                    # PDF文件，用AI分析PDF（会内部提取文字+调用AI）
                     print("使用AI分析PDF...")
                     ai_result = ExamRecognizer.analyze_pdf_with_ai(file_path)
                 elif is_image:
-                    # 图片文件，尝试用AI分析图片（仅支持OpenAI）
+                    # 图片文件，AI视觉分析（自动降级为 OCR + 文本分析）
                     print("尝试AI图片分析...")
                     ai_result = ExamRecognizer.analyze_image_with_ai(file_path)
                 else:
-                    ai_result = None
+                    # docx/doc 等文档格式：OCR 可能已失败，直接尝试用文档转文字+AI
+                    print(f"OCR未提取文字，使用AI分析文档内容...")
+                    doc_text = ExamRecognizer.extract_text(file_path)
+                    if doc_text and len(doc_text) > 10:
+                        ai_result = ExamRecognizer.analyze_with_ai(doc_text, [file_path], original_filename)
+                    else:
+                        ai_result = None
                 
                 if ai_result:
                     result['ai_analysis'] = ai_result
@@ -698,19 +731,18 @@ class ExamRecognizer:
     
     @staticmethod
     def analyze_image_with_ai(image_path):
-        """使用AI视觉模型分析图片"""
+        """使用AI视觉模型分析图片。
+        优先使用视觉模型识别；不支持视觉时自动降级为 OCR + 纯文本分析。"""
         from ai_analyzer import get_analyzer
         import base64
-        
+
         analyzer = get_analyzer()
-        
-        # 检查是否支持图片分析（只有部分模型支持）
-        supported_providers = ['openai']
-        if analyzer.provider not in supported_providers:
-            # 不支持图片分析，使用OCR + 文字分析
-            return None
-        
-        prompt = """请分析这张试卷图片，提取以下信息并以JSON格式返回：
+
+        # 支持视觉的提供商（OpenAI兼容 API 且模型支持 vision）
+        vision_providers = ['openai', 'deepseek', 'moonshot', 'qwen', 'zhipu']
+        use_vision = analyzer.provider in vision_providers and analyzer.api_key
+
+        prompt_text = """请分析这张试卷图片，提取以下信息并以JSON格式返回：
 
 1. title: 试卷标题
 2. subject: 学科（语文/数学/英语/物理/化学/生物/历史/地理/政治）
@@ -723,21 +755,21 @@ class ExamRecognizer:
 
 请尽量准确识别。只返回JSON，不要其他内容。"""
 
+        if not use_vision:
+            return None
+
         try:
-            # 读取图片并转为base64
             with open(image_path, 'rb') as f:
                 img_data = base64.b64encode(f.read()).decode()
-            
-            # 构建带图片的消息
+
             messages = [{
                 'role': 'user',
                 'content': [
-                    {'type': 'text', 'text': prompt},
-                    {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{img_data}'}}
+                    {'type': 'text', 'text': prompt_text},
+                    {'type': 'image_url',
+                     'image_url': {'url': f'data:image/jpeg;base64,{img_data}'}}
                 ]
             }]
-            
-            # 调用AI
             headers = {
                 'Authorization': f'Bearer {analyzer.api_key}',
                 'Content-Type': 'application/json'
@@ -757,22 +789,14 @@ class ExamRecognizer:
             if response.status_code == 200:
                 result = response.json()
                 content = result['choices'][0]['message']['content']
-                
-                # 解析JSON
-                content = content.strip()
-                if content.startswith('```'):
-                    content = content.split('\n', 1)[1] if '\n' in content else content[3:]
-                if content.endswith('```'):
-                    content = content[:-3]
-                if content.startswith('json'):
-                    content = content[4:]
-                
                 return ExamRecognizer.parse_json_response(content)
-            
-            return None
+
+            print(f"视觉识别 API 返回 {response.status_code}，降级为 OCR + 文本分析")
+
         except Exception as e:
-            print(f"AI图片分析失败: {e}")
-            return None
+            print(f"AI视觉分析失败: {e}，降级为 OCR + 文本分析")
+
+        return None
     
     @staticmethod
     def analyze_pdf_with_ai(pdf_path):
@@ -791,7 +815,11 @@ class ExamRecognizer:
             doc.close()
             
             if not full_text or len(full_text.strip()) < 10:
-                print("PDF文字提取失败，内容太少")
+                print("PDF文字提取失败，尝试 OCR 提取...")
+                full_text = ExamRecognizer.extract_text_from_pdf(pdf_path)
+            
+            if not full_text or len(full_text.strip()) < 10:
+                print("PDF文字和OCR提取均失败，内容太少")
                 return None
             
             print(f"PDF提取文字长度: {len(full_text)}")
@@ -814,16 +842,6 @@ class ExamRecognizer:
 只返回JSON，不要其他内容。"""
 
             result = analyzer.chat(prompt)
-            
-            # 解析JSON
-            result = result.strip()
-            if result.startswith('```'):
-                result = result.split('\n', 1)[1] if '\n' in result else result[3:]
-            if result.endswith('```'):
-                result = result[:-3]
-            if result.startswith('json'):
-                result = result[4:]
-            
             return ExamRecognizer.parse_json_response(result)
             
         except Exception as e:

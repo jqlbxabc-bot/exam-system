@@ -459,19 +459,27 @@ class AIAnalyzer:
 
 
 def get_analyzer():
-    """获取AI分析器实例"""
+    """获取AI分析器实例。
+    优先级：环境变量 > 数据库配置 > 默认值"""
     from database import get_config, get_default_ai_config
     
     defaults = get_default_ai_config()
-    provider = defaults['ai_provider'] if os.environ.get('AI_PROVIDER') else get_config('ai_provider', defaults['ai_provider'])
-    api_key = defaults['ai_api_key'] if (os.environ.get('AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY')) else get_config('ai_api_key', defaults['ai_api_key'])
-    model = defaults['ai_model'] if (os.environ.get('AI_MODEL') or os.environ.get('DEEPSEEK_MODEL')) else get_config('ai_model', defaults['ai_model'])
-    base_url = defaults['ai_base_url'] if (os.environ.get('AI_BASE_URL') or os.environ.get('DEEPSEEK_BASE_URL')) else get_config('ai_base_url', defaults['ai_base_url'])
-
-    provider = provider or defaults['ai_provider']
-    api_key = api_key or defaults['ai_api_key']
-    model = model or defaults['ai_model']
-    base_url = base_url or defaults['ai_base_url']
+    
+    # 环境变量优先，其次是数据库配置，最后是默认值
+    def resolve(key, env_keys):
+        for env_key in env_keys:
+            val = os.environ.get(env_key)
+            if val:
+                return val
+        db_val = get_config(key, None)
+        if db_val:
+            return db_val
+        return defaults.get(key, '')
+    
+    provider = resolve('ai_provider', ['AI_PROVIDER'])
+    api_key = resolve('ai_api_key', ['AI_API_KEY', 'DEEPSEEK_API_KEY'])
+    model = resolve('ai_model', ['AI_MODEL', 'DEEPSEEK_MODEL'])
+    base_url = resolve('ai_base_url', ['AI_BASE_URL', 'DEEPSEEK_BASE_URL'])
     
     return AIAnalyzer(provider, api_key, model, base_url)
 

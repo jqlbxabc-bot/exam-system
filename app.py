@@ -1723,11 +1723,11 @@ def gaokao_batch_classify():
 3. difficulty要准确评估
 只返回JSON。"""
 
-        result = analyzer.chat(prompt)
-        if not result or not result.get('success'):
+        response_text = analyzer.chat(prompt)
+        if not response_text or not isinstance(response_text, str) or response_text.startswith(('错误', 'AI服务暂时不可用')):
             continue
         
-        content = result.get('content', '')
+        content = response_text
         try:
             json_str = content.strip()
             if json_str.startswith('```'):
