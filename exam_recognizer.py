@@ -6,6 +6,7 @@ import os
 import re
 import json
 import requests
+import subprocess
 from datetime import datetime
 
 class ExamRecognizer:
@@ -52,6 +53,50 @@ class ExamRecognizer:
         '实验题': ['实验题', '实验'],
         '作文题': ['作文', '写作']
     }
+
+    @staticmethod
+    def normalize_text(text):
+        """清理OCR常见空格，便于规则识别。"""
+        if not text:
+            return ""
+        text = text.replace('\u3000', ' ')
+        text = re.sub(r'(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])', '', text)
+        text = re.sub(r'(?<=[\u4e00-\u9fff])\s+(?=[A-Za-z0-9])', '', text)
+        text = re.sub(r'(?<=[A-Za-z0-9])\s+(?=[\u4e00-\u9fff])', '', text)
+        text = re.sub(r'(\d)\s+(?=分|分钟|年|月|日)', r'\1', text)
+        text = re.sub(r'(?<=第)\s+([一二三四五六七八九十])', r'\1', text)
+        return text
+
+    @staticmethod
+    def parse_json_response(content):
+        """从AI回复中提取JSON，兼容代码块和前后解释文字。"""
+        if not content:
+            return None
+
+        text = content.strip()
+        if text.startswith('```'):
+            text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'\s*```$', '', text)
+
+        candidates = [text]
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            candidates.append(match.group(0))
+
+        for candidate in candidates:
+            try:
+                return json.loads(candidate.strip(), strict=False)
+            except Exception:
+                pass
+
+        fixed = candidates[-1]
+        fixed = fixed.replace('，', ',').replace('：', ':')
+        fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+        try:
+            return json.loads(fixed.strip(), strict=False)
+        except Exception as e:
+            print(f"AI JSON解析失败: {e}; 原始返回: {content[:500]}")
+            return None
     
     @staticmethod
     def extract_text_from_image(image_path):
@@ -242,6 +287,21 @@ class ExamRecognizer:
             return text or ""
         except Exception as e:
             print(f"旧版Word(.doc)提取失败: {e}")
+
+        for cmd in (['antiword', doc_path], ['catdoc', '-w', doc_path]):
+            try:
+                completed = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='ignore',
+                    timeout=30
+                )
+                if completed.returncode == 0 and completed.stdout.strip():
+                    return completed.stdout
+            except Exception as e:
+                print(f".doc命令提取失败({cmd[0]}): {e}")
         
         return ""
     
@@ -264,7 +324,7 @@ class ExamRecognizer:
     @staticmethod
     def recognize_subject(text):
         """识别学科"""
-        text = text or ""
+        text = ExamRecognizer.normalize_text(text or "")
         text_lower = text.lower()
         header = text[:1200]
         header_lower = header.lower()
@@ -293,6 +353,15 @@ class ExamRecognizer:
     @staticmethod
     def recognize_grade(text):
         """识别年级"""
+        text = ExamRecognizer.normalize_text(text or "")
+        direct_patterns = {
+            '高一': [r'高一', r'高中一年级', r'高1'],
+            '高二': [r'高二', r'高中二年级', r'高2'],
+            '高三': [r'高三', r'高中三年级', r'高3'],
+        }
+        for grade, patterns in direct_patterns.items():
+            if any(re.search(pattern, text) for pattern in patterns):
+                return grade
         for grade, keywords in ExamRecognizer.GRADE_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in text:
@@ -302,7 +371,7 @@ class ExamRecognizer:
     @staticmethod
     def recognize_exam_type(text):
         """识别考试类型"""
-        text = text or ""
+        text = ExamRecognizer.normalize_text(text or "")
         header = text[:1200]
         if re.search(r'(模拟|模考|仿真|一模|二模|三模)', header):
             return '模拟'
@@ -321,9 +390,14 @@ class ExamRecognizer:
     @staticmethod
     def recognize_total_score(text):
         """识别总分"""
+        text = ExamRecognizer.normalize_text(text or "")
         patterns = [
             r'总分[：:]\s*(\d+)\s*分',
             r'满分[：:]\s*(\d+)\s*分',
+            r'满分\s*(\d+)\s*分',
+            r'全卷满分\s*(\d+)\s*分',
+            r'本试卷.{0,30}满分\s*(\d+)\s*分',
+            r'试卷.{0,30}满分\s*(\d+)\s*分',
             r'共\s*(\d+)\s*分',
             r'(\d+)\s*分\s*满分',
         ]
@@ -331,13 +405,22 @@ class ExamRecognizer:
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
-                return float(match.group(1))
+                value = float(match.group(1))
+                if value >= 60 or '满分' in pattern or '总分' in pattern:
+                    return value
+
+        header = text[:1500]
+        scores = [int(x) for x in re.findall(r'(?<!小题)(?<!每题)(?<!每小题)(\d{2,3})\s*分', header)]
+        plausible = [score for score in scores if 60 <= score <= 300]
+        if plausible:
+            return float(max(plausible))
         
         return None
     
     @staticmethod
     def recognize_exam_date(text):
         """识别考试日期"""
+        text = ExamRecognizer.normalize_text(text or "")
         patterns = [
             r'(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日号]?',
             r'(\d{4})[年/-](\d{1,2})月',
@@ -360,6 +443,7 @@ class ExamRecognizer:
     @staticmethod
     def extract_title(text, source_name=None):
         """提取试卷标题"""
+        text = ExamRecognizer.normalize_text(text or "")
         noise_patterns = [
             '绝密', '启用前', '注意事项', '本试卷', '答题卡', '姓名', '准考证号',
             '考试时间', '满分', '总分', '班级', '学校'
@@ -477,8 +561,9 @@ class ExamRecognizer:
             if result.startswith('json'):
                 result = result[4:]
             
-            return json.loads(result.strip())
-        except:
+            return ExamRecognizer.parse_json_response(result)
+        except Exception as e:
+            print(f"AI分析调用失败: {e}")
             return None
     
     @staticmethod
@@ -554,12 +639,13 @@ class ExamRecognizer:
             print(f"OCR提取失败: {e}")
         
         filename_context = os.path.splitext(os.path.basename(original_filename or file_path))[0]
-        recognition_text = f"{filename_context}\n{text}" if filename_context else text
+        normalized_text = ExamRecognizer.normalize_text(text)
+        recognition_text = f"{filename_context}\n{normalized_text}" if filename_context else normalized_text
         result['text'] = text
         
         # 如果有文字，进行基础识别
         if recognition_text and len(recognition_text) > 2:
-            result['title'] = ExamRecognizer.extract_title(text, original_filename)
+            result['title'] = ExamRecognizer.extract_title(normalized_text, original_filename)
             result['subject'] = ExamRecognizer.recognize_subject(recognition_text)
             result['grade'] = ExamRecognizer.recognize_grade(recognition_text)
             result['exam_type'] = ExamRecognizer.recognize_exam_type(text) or ExamRecognizer.recognize_exam_type(filename_context)
@@ -681,7 +767,7 @@ class ExamRecognizer:
                 if content.startswith('json'):
                     content = content[4:]
                 
-                return json.loads(content.strip())
+                return ExamRecognizer.parse_json_response(content)
             
             return None
         except Exception as e:
@@ -738,7 +824,7 @@ class ExamRecognizer:
             if result.startswith('json'):
                 result = result[4:]
             
-            return json.loads(result.strip())
+            return ExamRecognizer.parse_json_response(result)
             
         except Exception as e:
             print(f"AI PDF分析失败: {e}")
