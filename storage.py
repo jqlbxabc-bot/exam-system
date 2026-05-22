@@ -12,16 +12,19 @@ class StorageManager:
     
     def __init__(self, storage_type='local', upload_folder='uploads'):
         self.storage_type = storage_type
-        self.upload_folder = upload_folder
-        os.makedirs(upload_folder, exist_ok=True)
+        self.upload_folder = os.path.abspath(upload_folder)
+        os.makedirs(self.upload_folder, exist_ok=True)
     
     def upload_file(self, file, filename=None, folder='exams'):
         """上传文件"""
         if filename is None:
-            filename = secure_filename(file.filename)
+            filename = file.filename or 'upload'
         
         # 生成唯一文件名
-        ext = os.path.splitext(filename)[1]
+        ext = os.path.splitext(filename)[1].lower()
+        if not ext:
+            safe_name = secure_filename(filename)
+            ext = os.path.splitext(safe_name)[1].lower()
         unique_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(filename.encode()).hexdigest()[:8]}{ext}"
         
         if self.storage_type == 'local':
@@ -211,12 +214,12 @@ class StorageManager:
         return file_path
 
 
-def get_storage_manager():
+def get_storage_manager(upload_folder=None):
     """获取存储管理器实例"""
     from database import get_config
     
     storage_type = get_config('storage_type', 'local')
-    return StorageManager(storage_type)
+    return StorageManager(storage_type, upload_folder or 'uploads')
 
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'}

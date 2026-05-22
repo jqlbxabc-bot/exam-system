@@ -3,6 +3,7 @@
 """试卷管理系统 - AI分析模块"""
 
 import json
+import os
 import requests
 from datetime import datetime
 
@@ -13,13 +14,13 @@ class AIAnalyzer:
         self.provider = provider
         self.api_key = api_key
         self.model = model
-        self.base_url = base_url or self._get_default_base_url()
+        self.base_url = (base_url or self._get_default_base_url()).rstrip('/')
     
     def _get_default_base_url(self):
         urls = {
             'openai': 'https://api.openai.com/v1',
             'claude': 'https://api.anthropic.com',
-            'deepseek': 'https://api.deepseek.com/v1',
+            'deepseek': 'https://api.deepseek.com',
             'qwen': 'https://dashscope.aliyuncs.com/api/v1',
             'zhipu': 'https://open.bigmodel.cn/api/paas/v4',
             'moonshot': 'https://api.moonshot.cn/v1',
@@ -459,12 +460,18 @@ class AIAnalyzer:
 
 def get_analyzer():
     """获取AI分析器实例"""
-    from database import get_config
+    from database import get_config, get_default_ai_config
     
-    provider = get_config('ai_provider', 'openai')
-    api_key = get_config('ai_api_key', '')
-    model = get_config('ai_model', 'gpt-4')
-    base_url = get_config('ai_base_url')
+    defaults = get_default_ai_config()
+    provider = defaults['ai_provider'] if os.environ.get('AI_PROVIDER') else get_config('ai_provider', defaults['ai_provider'])
+    api_key = defaults['ai_api_key'] if (os.environ.get('AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY')) else get_config('ai_api_key', defaults['ai_api_key'])
+    model = defaults['ai_model'] if (os.environ.get('AI_MODEL') or os.environ.get('DEEPSEEK_MODEL')) else get_config('ai_model', defaults['ai_model'])
+    base_url = defaults['ai_base_url'] if (os.environ.get('AI_BASE_URL') or os.environ.get('DEEPSEEK_BASE_URL')) else get_config('ai_base_url', defaults['ai_base_url'])
+
+    provider = provider or defaults['ai_provider']
+    api_key = api_key or defaults['ai_api_key']
+    model = model or defaults['ai_model']
+    base_url = base_url or defaults['ai_base_url']
     
     return AIAnalyzer(provider, api_key, model, base_url)
 

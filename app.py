@@ -192,33 +192,80 @@ def upload_exam():
             title = request.form.get('title', '').strip()
             subject = request.form.get('subject', '').strip()
             grade = request.form.get('grade', '').strip()
-            exam_type = request.form.get('exam_type', '月考').strip()
+            exam_type = request.form.get('exam_type', '').strip()
             exam_date = request.form.get('exam_date', '').strip()
-            total_score = request.form.get('total_score', '150')
+            total_score_raw = request.form.get('total_score', '').strip()
             description = request.form.get('description', '').strip()
             auto_recognize = request.form.get('auto_recognize') == 'on'
             
+            total_score = None
             try:
-                total_score = float(total_score)
-            except:
-                total_score = 150.0
+                total_score = float(total_score_raw) if total_score_raw else None
+            except ValueError:
+                total_score = None
             
             user = get_current_user()
             
-            # 处理文件上传
+            # 处理文件上传：主文件和多页文件都算有效上传。
             file_path = None
             file_type = None
             cloud_url = None
+            uploaded_files = []
+            invalid_files = []
+            storage = get_storage_manager(app.config['UPLOAD_FOLDER'])
             
-            if 'file' in request.files:
-                file = request.files['file']
-                if file and file.filename and allowed_file(file.filename):
-                    storage = get_storage_manager()
-                    upload_result = storage.upload_file(file, folder='exams')
-                    if upload_result['success']:
-                        file_path = upload_result.get('file_path')
-                        file_type = file.filename.rsplit('.', 1)[1].lower()
-                        cloud_url = upload_result.get('cloud_url')
+            def upload_one_file(file, page_number, is_primary=False):
+                if not file or not file.filename:
+                    return None
+                if not allowed_file(file.filename):
+                    invalid_files.append(file.filename)
+                    return None
+
+                original_name = file.filename
+                upload_result = storage.upload_file(file, folder='exams')
+                if not upload_result.get('success'):
+                    raise RuntimeError(f"{original_name} 上传失败: {upload_result.get('error', '未知错误')}")
+
+                item = {
+                    'original_name': original_name,
+                    'file_path': upload_result.get('file_path'),
+                    'cloud_url': upload_result.get('cloud_url'),
+                    'file_type': original_name.rsplit('.', 1)[1].lower(),
+                    'page_number': page_number,
+                    'is_primary': is_primary
+                }
+                uploaded_files.append(item)
+                return item
+
+            main_file = request.files.get('file')
+            extra_files = [f for f in request.files.getlist('files') if f and f.filename]
+
+            primary_file = None
+            next_page = 1
+            if main_file and main_file.filename:
+                primary_file = upload_one_file(main_file, next_page, is_primary=True)
+                if primary_file:
+                    next_page += 1
+
+            for extra_file in extra_files:
+                uploaded = upload_one_file(extra_file, next_page, is_primary=False)
+                if uploaded:
+                    if primary_file is None:
+                        uploaded['is_primary'] = True
+                        primary_file = uploaded
+                    next_page += 1
+
+            if invalid_files:
+                flash(f'以下文件格式不支持，已跳过: {", ".join(invalid_files)}', 'warning')
+
+            if not uploaded_files:
+                flash('请至少上传一个支持的试卷文件', 'error')
+                return redirect(url_for('upload_exam'))
+
+            if primary_file:
+                file_path = primary_file['file_path']
+                file_type = primary_file['file_type']
+                cloud_url = primary_file['cloud_url']
             
             # 自动识别试卷
             recognition_result = None
@@ -227,7 +274,11 @@ def upload_exam():
                     from exam_recognizer import ExamRecognizer
                     recognizer = ExamRecognizer()
                     # 优先使用AI识别（包括AI视觉识别）
-                    recognition_result = recognizer.recognize_exam(file_path, use_ai=True)
+                    recognition_result = recognizer.recognize_exam(
+                        file_path,
+                        use_ai=True,
+                        original_filename=primary_file.get('original_name') if primary_file else None
+                    )
                     
                     # 用识别结果填充空字段
                     if not title and recognition_result.get('title'):
@@ -240,7 +291,7 @@ def upload_exam():
                         exam_type = recognition_result['exam_type']
                     if not exam_date and recognition_result.get('exam_date'):
                         exam_date = recognition_result['exam_date']
-                    if recognition_result.get('total_score'):
+                    if total_score is None and recognition_result.get('total_score'):
                         total_score = recognition_result['total_score']
                     if not description and recognition_result.get('description'):
                         description = recognition_result['description']
@@ -251,11 +302,16 @@ def upload_exam():
             
             # 确保必填字段
             if not title:
-                title = f'{subject or "未命名"}试卷_{datetime.now().strftime("%Y%m%d")}'
+                if primary_file and primary_file.get('original_name'):
+                    title = os.path.splitext(primary_file['original_name'])[0]
+                else:
+                    title = f'{subject or "未命名"}试卷_{datetime.now().strftime("%Y%m%d")}'
             if not subject:
                 subject = '其他'
             if not exam_type:
                 exam_type = '其他'
+            if total_score is None:
+                total_score = 150.0
             
             # 创建试卷记录
             exam_id = db.add_exam(
@@ -268,22 +324,16 @@ def upload_exam():
                 upload_user_id=user['id']
             )
             
-            # 处理多文件上传
-            if 'files' in request.files:
-                files = request.files.getlist('files')
-                for i, f in enumerate(files):
-                    if f and f.filename and allowed_file(f.filename):
-                        storage = get_storage_manager()
-                        upload_result = storage.upload_file(f, folder=f'exams/{exam_id}')
-                        if upload_result['success']:
-                            db.add_exam_file(
-                                exam_id=exam_id,
-                                file_name=f.filename,
-                                file_path=upload_result.get('file_path'),
-                                cloud_url=upload_result.get('cloud_url'),
-                                file_type=f.filename.rsplit('.', 1)[1].lower(),
-                                page_number=i+1
-                            )
+            # 保存所有上传文件记录，确保预览和后续分析能拿到完整文件列表。
+            for item in uploaded_files:
+                db.add_exam_file(
+                    exam_id=exam_id,
+                    file_name=item['original_name'],
+                    file_path=item.get('file_path'),
+                    cloud_url=item.get('cloud_url'),
+                    file_type=item.get('file_type'),
+                    page_number=item.get('page_number') or 1
+                )
             
             # 保存识别结果
             if recognition_result:
@@ -1427,7 +1477,7 @@ def test_ai():
     analyzer = get_analyzer()
     result = analyzer.chat('你好，请回复"连接成功"四个字。')
     
-    if '连接成功' in result or '成功' in result:
+    if result and not str(result).startswith(('错误:', 'AI服务暂时不可用')):
         return jsonify({'success': True, 'message': 'AI连接测试成功！'})
     else:
         return jsonify({'success': False, 'message': f'AI响应: {result}'})

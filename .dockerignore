@@ -1,0 +1,13 @@
+.git
+.env
+.env.local
+data/
+uploads/
+logs/
+__pycache__/
+*.pyc
+*.pyo
+build/
+dist/
+*.db
+*.sqlite3

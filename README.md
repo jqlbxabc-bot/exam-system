@@ -44,6 +44,19 @@ python build.py
 
 - 管理员：admin / admin123
 
+## 云端 AI 默认配置
+
+部署到 Railway、Docker、云服务器等环境时，请设置环境变量：
+
+```bash
+AI_PROVIDER=deepseek
+AI_API_KEY=你的DeepSeek API Key
+AI_MODEL=deepseek-v4-flash
+AI_BASE_URL=https://api.deepseek.com
+```
+
+程序启动时会自动读取这些变量并写入系统配置；网页端无需再次手动填写 API 配置。
+
 ## 功能特性
 
 - 试卷管理（上传/编辑/预览/搜索）

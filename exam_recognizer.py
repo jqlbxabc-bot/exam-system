@@ -10,6 +10,9 @@ from datetime import datetime
 
 class ExamRecognizer:
     """试卷识别器，自动提取试卷信息"""
+    VALID_SUBJECTS = {'语文', '数学', '英语', '物理', '化学', '生物', '历史', '地理', '政治'}
+    VALID_GRADES = {'高一', '高二', '高三'}
+    VALID_EXAM_TYPES = {'月考', '期中', '期末', '模拟', '高考真题', '竞赛'}
     
     # 学科关键词
     SUBJECT_KEYWORDS = {
@@ -201,14 +204,44 @@ class ExamRecognizer:
     
     @staticmethod
     def extract_text_from_docx(docx_path):
-        """从Word文档中提取文字"""
+        """从Word文档中提取文字，包含表格内容。"""
         try:
             import docx
             doc = docx.Document(docx_path)
-            text = "\n".join([para.text for para in doc.paragraphs])
-            return text
+            parts = [para.text for para in doc.paragraphs if para.text and para.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells if cell.text and cell.text.strip()]
+                    if cells:
+                        parts.append(" | ".join(cells))
+            return "\n".join(parts)
         except ImportError:
-            pass
+            print("python-docx未安装")
+        except Exception as e:
+            print(f"Word文档提取失败: {e}")
+
+        return ""
+
+    @staticmethod
+    def extract_text_from_doc(doc_path):
+        """尽量从旧版 .doc 文档提取文字。"""
+        # 有些 .doc 实际是 docx 格式，先试 python-docx。
+        text = ExamRecognizer.extract_text_from_docx(doc_path)
+        if text.strip():
+            return text
+
+        # Windows 本地运行时，如果安装了 Word/pywin32，可以走 COM 自动化。
+        try:
+            import win32com.client
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False
+            doc = word.Documents.Open(os.path.abspath(doc_path))
+            text = doc.Content.Text
+            doc.Close(False)
+            word.Quit()
+            return text or ""
+        except Exception as e:
+            print(f"旧版Word(.doc)提取失败: {e}")
         
         return ""
     
@@ -221,22 +254,35 @@ class ExamRecognizer:
             return ExamRecognizer.extract_text_from_image(file_path)
         elif ext == '.pdf':
             return ExamRecognizer.extract_text_from_pdf(file_path)
-        elif ext in ['.doc', '.docx']:
+        elif ext == '.docx':
             return ExamRecognizer.extract_text_from_docx(file_path)
+        elif ext == '.doc':
+            return ExamRecognizer.extract_text_from_doc(file_path)
         
         return ""
     
     @staticmethod
     def recognize_subject(text):
         """识别学科"""
+        text = text or ""
         text_lower = text.lower()
+        header = text[:1200]
+        header_lower = header.lower()
         scores = {}
         
         for subject, keywords in ExamRecognizer.SUBJECT_KEYWORDS.items():
             score = 0
             for keyword in keywords:
-                if keyword in text_lower:
+                keyword_lower = keyword.lower()
+                if keyword_lower in header_lower:
+                    score += 3
+                elif keyword_lower in text_lower:
                     score += 1
+            # 标题/页眉里的“科目+试卷/试题/考试”比正文知识点更可靠。
+            if re.search(rf'{subject}.{{0,12}}(试卷|试题|考试|测试|检测|真题)', header):
+                score += 8
+            if re.search(rf'(试卷|试题|考试|测试|检测|真题).{{0,12}}{subject}', header):
+                score += 8
             if score > 0:
                 scores[subject] = score
         
@@ -256,10 +302,20 @@ class ExamRecognizer:
     @staticmethod
     def recognize_exam_type(text):
         """识别考试类型"""
-        for exam_type, keywords in ExamRecognizer.EXAM_TYPE_KEYWORDS.items():
-            for keyword in keywords:
-                if keyword in text:
-                    return exam_type
+        text = text or ""
+        header = text[:1200]
+        if re.search(r'(模拟|模考|仿真|一模|二模|三模)', header):
+            return '模拟'
+        if re.search(r'(期末|期末考试)', header):
+            return '期末'
+        if re.search(r'(期中|中期)', header):
+            return '期中'
+        if re.search(r'(月考|月测|阶段测试)', header):
+            return '月考'
+        if re.search(r'(竞赛|奥林匹克|奥赛)', header):
+            return '竞赛'
+        if re.search(r'(高考|全国卷|新高考).{0,12}(真题|试题|试卷)', header):
+            return '高考真题'
         return None
     
     @staticmethod
@@ -277,13 +333,7 @@ class ExamRecognizer:
             if match:
                 return float(match.group(1))
         
-        # 默认根据题型判断
-        if '150分' in text or '150' in text:
-            return 150.0
-        elif '100分' in text or '100' in text:
-            return 100.0
-        
-        return 150.0  # 默认150分
+        return None
     
     @staticmethod
     def recognize_exam_date(text):
@@ -308,16 +358,31 @@ class ExamRecognizer:
         return None
     
     @staticmethod
-    def extract_title(text):
+    def extract_title(text, source_name=None):
         """提取试卷标题"""
+        noise_patterns = [
+            '绝密', '启用前', '注意事项', '本试卷', '答题卡', '姓名', '准考证号',
+            '考试时间', '满分', '总分', '班级', '学校'
+        ]
         # 尝试从第一行提取标题
         lines = text.strip().split('\n')
-        for line in lines[:5]:
-            line = line.strip()
+        candidates = []
+        for line in lines[:12]:
+            line = re.sub(r'\s+', ' ', line.strip())
+            if not line or any(noise in line for noise in noise_patterns):
+                continue
             if len(line) > 5 and len(line) < 100:
                 # 检查是否包含年份、科目等关键词
                 if any(keyword in line for keyword in ['年', '学期', '考试', '测试', '试卷', '检测']):
-                    return line
+                    candidates.append(line)
+        if candidates:
+            return candidates[0]
+        
+        if source_name:
+            stem = os.path.splitext(os.path.basename(source_name))[0]
+            stem = re.sub(r'[_\-]+', ' ', stem).strip()
+            if stem:
+                return stem[:80]
         
         # 如果没找到，返回前30个字符
         first_line = lines[0].strip() if lines else "未命名试卷"
@@ -366,11 +431,14 @@ class ExamRecognizer:
         return '解答题'
     
     @staticmethod
-    def analyze_with_ai(text, file_paths=None):
+    def analyze_with_ai(text, file_paths=None, source_name=None):
         """使用AI分析试卷内容"""
         from ai_analyzer import get_analyzer
         
         prompt = f"""请分析以下试卷内容，提取关键信息并以JSON格式返回：
+
+文件名：
+{source_name or '未知'}
 
 试卷内容：
 {text[:3000]}
@@ -414,14 +482,55 @@ class ExamRecognizer:
             return None
     
     @staticmethod
-    def recognize_exam(file_path, use_ai=True):
+    def _clean_ai_result(ai_result):
+        """过滤AI返回值，避免无效字段覆盖基础识别结果。"""
+        if not isinstance(ai_result, dict):
+            return {}
+
+        cleaned = {}
+        subject = ai_result.get('subject')
+        if subject in ExamRecognizer.VALID_SUBJECTS:
+            cleaned['subject'] = subject
+
+        grade = ai_result.get('grade')
+        if grade in ExamRecognizer.VALID_GRADES:
+            cleaned['grade'] = grade
+
+        exam_type = ai_result.get('exam_type')
+        if exam_type in ExamRecognizer.VALID_EXAM_TYPES:
+            cleaned['exam_type'] = exam_type
+
+        title = ai_result.get('title')
+        if isinstance(title, str) and 3 <= len(title.strip()) <= 120:
+            cleaned['title'] = title.strip()
+
+        description = ai_result.get('description')
+        if isinstance(description, str) and description.strip():
+            cleaned['description'] = description.strip()[:300]
+
+        total_score = ai_result.get('total_score')
+        try:
+            total_score = float(total_score)
+            if 1 <= total_score <= 1000:
+                cleaned['total_score'] = total_score
+        except (TypeError, ValueError):
+            pass
+
+        exam_date = ai_result.get('exam_date')
+        if isinstance(exam_date, str) and re.match(r'^\d{4}-\d{2}-\d{2}$', exam_date):
+            cleaned['exam_date'] = exam_date
+
+        return cleaned
+
+    @staticmethod
+    def recognize_exam(file_path, use_ai=True, original_filename=None):
         """综合识别试卷"""
         result = {
             'title': None,
             'subject': None,
             'grade': None,
             'exam_type': None,
-            'total_score': 150.0,
+            'total_score': None,
             'exam_date': None,
             'description': None,
             'text': None,
@@ -444,16 +553,18 @@ class ExamRecognizer:
         except Exception as e:
             print(f"OCR提取失败: {e}")
         
+        filename_context = os.path.splitext(os.path.basename(original_filename or file_path))[0]
+        recognition_text = f"{filename_context}\n{text}" if filename_context else text
         result['text'] = text
         
         # 如果有文字，进行基础识别
-        if text and len(text) > 10:
-            result['title'] = ExamRecognizer.extract_title(text)
-            result['subject'] = ExamRecognizer.recognize_subject(text)
-            result['grade'] = ExamRecognizer.recognize_grade(text)
-            result['exam_type'] = ExamRecognizer.recognize_exam_type(text)
-            result['total_score'] = ExamRecognizer.recognize_total_score(text)
-            result['exam_date'] = ExamRecognizer.recognize_exam_date(text)
+        if recognition_text and len(recognition_text) > 2:
+            result['title'] = ExamRecognizer.extract_title(text, original_filename)
+            result['subject'] = ExamRecognizer.recognize_subject(recognition_text)
+            result['grade'] = ExamRecognizer.recognize_grade(recognition_text)
+            result['exam_type'] = ExamRecognizer.recognize_exam_type(text) or ExamRecognizer.recognize_exam_type(filename_context)
+            result['total_score'] = ExamRecognizer.recognize_total_score(recognition_text)
+            result['exam_date'] = ExamRecognizer.recognize_exam_date(recognition_text)
             result['questions'] = ExamRecognizer.extract_questions(text)
             print(f"基础识别结果: 标题={result['title']}, 科目={result['subject']}")
         
@@ -463,7 +574,7 @@ class ExamRecognizer:
                 # 如果有文字，用AI分析文字
                 if text and len(text) > 10:
                     print("使用AI分析OCR文字...")
-                    ai_result = ExamRecognizer.analyze_with_ai(text, [file_path])
+                    ai_result = ExamRecognizer.analyze_with_ai(text, [file_path], original_filename)
                 elif is_pdf:
                     # PDF文件，用AI分析PDF
                     print("使用AI分析PDF...")
@@ -477,6 +588,7 @@ class ExamRecognizer:
                 
                 if ai_result:
                     result['ai_analysis'] = ai_result
+                    ai_result = ExamRecognizer._clean_ai_result(ai_result)
                     # 用AI结果补充或覆盖基础识别结果
                     if ai_result.get('title'):
                         result['title'] = ai_result['title']
@@ -647,7 +759,7 @@ def auto_recognize_and_save(file_path, user_id=None):
         grade=result.get('grade'),
         exam_type=result.get('exam_type') or '其他',
         exam_date=result.get('exam_date'),
-        total_score=result.get('total_score', 150),
+        total_score=result.get('total_score') or 150,
         description=result.get('description'),
         file_path=file_path,
         file_type=os.path.splitext(file_path)[1][1:],

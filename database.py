@@ -5,6 +5,43 @@
 import os
 from datetime import datetime
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def load_local_env():
+    """加载本地 .env 配置，不覆盖已经存在的系统环境变量。"""
+    env_path = os.path.join(BASE_DIR, '.env')
+    if not os.path.exists(env_path):
+        return
+
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception as e:
+        print(f"加载本地.env失败: {e}")
+
+load_local_env()
+
+def get_default_ai_config():
+    """读取本地/云端默认AI配置。"""
+    provider = os.environ.get('AI_PROVIDER', 'deepseek')
+    model = os.environ.get('AI_MODEL') or os.environ.get('DEEPSEEK_MODEL', 'deepseek-v4-flash')
+    base_url = os.environ.get('AI_BASE_URL') or os.environ.get('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
+    api_key = os.environ.get('AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY', '')
+    return {
+        'ai_provider': provider,
+        'ai_api_key': api_key,
+        'ai_model': model,
+        'ai_base_url': base_url,
+    }
+
 # 检测数据库类型
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 USE_POSTGRES = bool(DATABASE_URL)
@@ -16,7 +53,7 @@ if USE_POSTGRES:
     if DATABASE_URL.startswith('postgres://'):
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'exam_system.db')
+DB_PATH = os.path.join(BASE_DIR, 'data', 'exam_system.db')
 
 def get_connection():
     if USE_POSTGRES:
@@ -274,11 +311,12 @@ def init_db():
 
 def init_default_config():
     """初始化默认配置"""
+    ai_config = get_default_ai_config()
     defaults = [
-        ('ai_provider', 'openai', 'AI提供商'),
-        ('ai_api_key', '', 'AI API Key'),
-        ('ai_model', 'gpt-4', 'AI模型名称'),
-        ('ai_base_url', 'https://api.openai.com/v1', 'AI API基础URL'),
+        ('ai_provider', ai_config['ai_provider'], 'AI提供商'),
+        ('ai_api_key', ai_config['ai_api_key'], 'AI API Key'),
+        ('ai_model', ai_config['ai_model'], 'AI模型名称'),
+        ('ai_base_url', ai_config['ai_base_url'], 'AI API基础URL'),
         ('storage_type', 'local', '存储类型(local/cloud)'),
         ('cloud_provider', '阿里云OSS', '云存储提供商'),
         ('cloud_endpoint', '', '云存储端点'),
@@ -299,6 +337,38 @@ def init_default_config():
             _execute(conn, '''INSERT OR IGNORE INTO config (config_key, config_value, description, updated_at) 
                              VALUES (?,?,?,?)''',
                     (key, value, desc, datetime.now().isoformat()))
+
+    # 如果旧数据库已有空值或旧默认值，自动补成当前 DeepSeek 默认配置。
+    ai_defaults = {
+        'ai_provider': ai_config['ai_provider'],
+        'ai_model': ai_config['ai_model'],
+        'ai_base_url': ai_config['ai_base_url'],
+    }
+    if ai_config['ai_api_key']:
+        ai_defaults['ai_api_key'] = ai_config['ai_api_key']
+
+    env_backed_keys = set()
+    if os.environ.get('AI_PROVIDER'):
+        env_backed_keys.add('ai_provider')
+    if os.environ.get('AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY'):
+        env_backed_keys.add('ai_api_key')
+    if os.environ.get('AI_MODEL') or os.environ.get('DEEPSEEK_MODEL'):
+        env_backed_keys.add('ai_model')
+    if os.environ.get('AI_BASE_URL') or os.environ.get('DEEPSEEK_BASE_URL'):
+        env_backed_keys.add('ai_base_url')
+
+    for key, value in ai_defaults.items():
+        cur = _execute(conn, 'SELECT config_value FROM config WHERE config_key=%s', (key,))
+        row = _fetchone(cur)
+        old_value = row['config_value'] if row else ''
+        should_update = key in env_backed_keys
+        should_update = should_update or not old_value
+        should_update = should_update or (key == 'ai_provider' and old_value == 'openai')
+        should_update = should_update or (key == 'ai_model' and old_value in ('gpt-4', 'deepseek-chat', 'deepseek-reasoner'))
+        should_update = should_update or (key == 'ai_base_url' and old_value in ('https://api.openai.com/v1', 'https://api.deepseek.com/v1'))
+        if should_update:
+            _execute(conn, 'UPDATE config SET config_value=%s, updated_at=%s WHERE config_key=%s',
+                     (value, datetime.now().isoformat(), key))
     conn.commit()
     conn.close()
 

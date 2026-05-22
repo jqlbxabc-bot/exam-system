@@ -45,7 +45,7 @@
                     <div class="mb-3">
                         <label class="form-label">模型名称</label>
                         <input type="text" class="form-control" id="ai_model" 
-                               placeholder="例如：gpt-4, claude-3-opus, deepseek-chat">
+                               placeholder="例如：deepseek-v4-flash, deepseek-v4-pro, gpt-4">
                     </div>
                     
                     <div class="mb-3">
@@ -80,8 +80,8 @@
                         <small class="d-block text-muted">api.openai.com</small>
                     </button>
                     <button class="list-group-item list-group-item-action" 
-                            onclick="loadPreset('deepseek', 'deepseek-chat', 'https://api.deepseek.com/v1')">
-                        <strong>DeepSeek</strong>
+                            onclick="loadPreset('deepseek', 'deepseek-v4-flash', 'https://api.deepseek.com')">
+                        <strong>DeepSeek V4 Flash</strong>
                         <small class="d-block text-muted">api.deepseek.com - 国内推荐</small>
                     </button>
                     <button class="list-group-item list-group-item-action" 
@@ -243,7 +243,7 @@ function updateBaseUrl() {
     const urls = {
         'openai': 'https://api.openai.com/v1',
         'claude': 'https://api.anthropic.com',
-        'deepseek': 'https://api.deepseek.com/v1',
+        'deepseek': 'https://api.deepseek.com',
         'qwen': 'https://dashscope.aliyuncs.com/api/v1',
         'zhipu': 'https://open.bigmodel.cn/api/paas/v4',
         'moonshot': 'https://api.moonshot.cn/v1',
